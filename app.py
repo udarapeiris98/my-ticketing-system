@@ -102,8 +102,8 @@ elif choice == "➕ Create Ticket":
     with st.form(key=f"ticket_form_{st.session_state.f_key}"):
         col1, col2 = st.columns(2)
         summ = col1.text_input("Summary")
-        assigned = col1.selectbox("Assign To", ["Admin", "Supun", "Udara", "Technician"])
-        cat = col1.selectbox("Category", ["Hardware", "Software", "Network", "Other"])
+        assigned = col1.selectbox("Assign To", ["Udara", "Supun", "Madushan", "Gihan", "NYS"])
+        cat = col1.selectbox("Category", ["Hardware", "Software", "Network", "Telephone", "Email", "Printer"])
         prio = col2.selectbox("Priority", ["Low", "Medium", "High", "Urgent"])
         org = col2.text_input("Organization / Dept")
         due = col2.date_input("Due Date", date.today() + timedelta(days=1))
