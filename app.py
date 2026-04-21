@@ -31,8 +31,8 @@ if 'logged_in' not in st.session_state:
 
 if not st.session_state['logged_in']:
     st.title("🔐 Secure Login")
-    u = st.text_input("Username")
-    p = st.text_input("Password", type='password')
+    u = st.text_input("username")
+    p = st.text_input("password", type='password')
     if st.button("Login"):
         if login_user(u, p):
             st.session_state['logged_in'] = True
