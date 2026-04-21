@@ -8,8 +8,8 @@ import time
 
 # --- 1. SUPABASE CONNECTION ---
 # ඔබ ලබාගත් URL සහ Key මෙතැනට නිවැරදිව ඇතුළත් කරන්න
-url: str = "ඔබේ_SUPABASE_URL_එක"
-key: str = "ඔබේ_SUPABASE_ANON_KEY_එක"
+url: str = "https://hjttradlagsogfgdyhai.supabase.co/rest/v1/"
+key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqdHRyYWRsYWdzb2dmZ2R5aGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MjU5MDAsImV4cCI6MjA5MjMwMTkwMH0.WcdJpwm_geu5swZ4qrsKYv9kPxQnrvC17ebndCq15xc"
 
 @st.cache_resource
 def init_connection():
