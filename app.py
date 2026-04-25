@@ -8,7 +8,7 @@ import io
 
 # --- 1. SUPABASE CONNECTION ---
 # ඔබගේ Supabase Settings -> API වෙතින් ලැබුණු URL සහ Key මෙහි ඇතුළත් කරන්න
-URL = "https://tfyulwcbjnmrecrukzsm.supabase.co/rest/v1/" 
+URL = "https://tfyulwcbjnmrecrukzsm.supabase.co" 
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeXVsd2Niam5tcmVjcnVrenNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwNTksImV4cCI6MjA5MjY2MDA1OX0.5P22_9CzrKKrMmrn0Vils-gnUlk-jQqzfXAf2M8ulD8"
 supabase = create_client(URL, KEY)
 
