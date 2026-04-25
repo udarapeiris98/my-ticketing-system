@@ -157,51 +157,105 @@ elif choice == "➕ Create Ticket":
                     st.success("✅ Ticket submitted to Cloud Database!"); time.sleep(1); st.rerun()
                 except Exception as e: st.error(f"Error: {e}")
 
-# --- 9. UPDATE & DELETE ---
+# --- 8. UPDATE & DELETE ---
 elif choice == "🔄 Update & Delete":
     st.title("🔄 Update or Delete Ticket")
     df = get_data()
+    
     if not df.empty:
+        # ටිකට් තෝරාගැනීම සඳහා ලැයිස්තුව සෑදීම
         ticket_options = {f"{row['ticket_number']} - {row['summary']}": row['ticket_number'] for _, row in df.iterrows()}
         selected_option = st.selectbox("Select Ticket", list(ticket_options.keys()))
         t_id = ticket_options[selected_option]
+        
         row = df[df['ticket_number'] == t_id].iloc[0]
         
-        with st.form("update_form"):
+        # Form එක ආරම්භය
+        with st.form("update_form_new"):
             col1, col2 = st.columns(2)
-            u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
-            u_assign = col1.selectbox("Re-assign To", ["Udara", "Supun", "Madushan", "Technician"], index=["Udara", "Supun", "Madushan", "Technician"].index(row['assigned_to']) if row['assigned_to'] in ["Udara", "Supun", "Madushan", "Technician"] else 0)
-            u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"], index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
             
+            # පවතින අගයන් ලබා ගැනීම
+            u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], 
+                                    index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
+            
+            technicians = ["Udara", "Supun", "Madushan", "Technician"]
+            u_assign = col1.selectbox("Re-assign To", technicians,
+                                    index=technicians.index(row['assigned_to']) if row['assigned_to'] in technicians else 0)
+            
+            u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"],
+                                   index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
+            
+            # --- දින වකවානු පරීක්ෂාව ---
             try:
                 db_date = row.get('due_on')
-                current_due_date = pd.to_datetime(db_date).date() if db_date and not pd.isna(db_date) else date.today()
-            except: current_due_date = date.today()
+                if pd.isna(db_date) or db_date == "" or db_date == "None" or db_date is None:
+                    current_due_date = datetime.now().date()
+                else:
+                    current_due_date = pd.to_datetime(db_date).date()
+            except:
+                current_due_date = datetime.now().date()
                 
             u_due_date = col2.date_input("Update Due Date", value=current_due_date)
             u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
             
-            if st.form_submit_button("✅ Save Changes"):
+            submit_update = st.form_submit_button("✅ Save Changes")
+            
+            if submit_update:
+                # කලින් තිබූ අගයන් ලබා ගැනීම
+                closed_on = str(row['closed_on']) if row['closed_on'] else ""
+                res_time = str(row['time_to_resolve']) if row['time_to_resolve'] else ""
+                t_spent = str(row['time_spent_min']) if row['time_spent_min'] else "0"
+                
                 now = datetime.now()
-                c_on = row['closed_on']; r_t = row['time_to_resolve']; t_s = row['time_spent_min']
-                if u_status in ["Resolved", "Closed"] and not c_on:
-                    c_on = now.strftime("%Y-%m-%d %H:%M")
-                    try:
-                        start = datetime.strptime(row['created_on'], "%Y-%m-%d %H:%M")
-                        diff = now - start
-                        sec = int(diff.total_seconds())
-                        r_t = f"{sec//86400}d {(sec%86400)//3600}h {(sec%3600)//60}m"
-                        t_s = str(sec // 60)
-                    except: r_t = "N/A"
+                # ටිකට් එක Resolve/Close කළහොත් කාලය ගණනය කිරීම
+                if u_status in ["Resolved", "Closed"]:
+                    if not row['closed_on'] or row['closed_on'] == "" or row['closed_on'] == "None":
+                        closed_on = now.strftime("%Y-%m-%d %H:%M")
+                        try:
+                            start = datetime.strptime(str(row['created_on']), "%Y-%m-%d %H:%M")
+                            diff = now - start
+                            sec = int(diff.total_seconds())
+                            res_time = f"{sec//86400}d {(sec%86400)//3600}h {(sec%3600)//60}m"
+                            t_spent = str(sec // 60)
+                        except:
+                            res_time = "N/A"
+                
+                # --- Supabase Update එක සිදු කරන ආකාරය ---
+                try:
+                    update_data = {
+                        "status": u_status,
+                        "assigned_to": u_assign,
+                        "priority": u_prio,
+                        "due_on": str(u_due_date),
+                        "time_spent_min": t_spent,
+                        "closed_on": closed_on,
+                        "time_to_resolve": res_time,
+                        "remarks": u_remarks
+                    }
+                    
+                    supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
+                    
+                    st.toast(f"Ticket {t_id} updated in Supabase!", icon='✅')
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Update Error: {e}")
 
-                upd = {"status": u_status, "assigned_to": u_assign, "priority": u_prio, "due_on": str(u_due_date), "time_spent_min": t_s, "closed_on": c_on, "time_to_resolve": r_t, "remarks": u_remarks}
-                supabase.table("tickets").update(upd).eq("ticket_number", t_id).execute()
-                st.success("Updated!"); time.sleep(1); st.rerun()
-
+        # Delete Section
         st.subheader("⚠️ Danger Zone")
-        if st.button("🗑️ Delete Ticket permanently") and st.checkbox("Confirm Deletion"):
-            supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
-            st.warning("Deleted!"); time.sleep(1); st.rerun()
+        confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
+        if st.button("🗑️ Delete Ticket permanently", disabled=not confirm_delete):
+            try:
+                # Supabase Delete එක සිදු කරන ආකාරය
+                supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
+                
+                st.warning(f"Ticket {t_id} removed from Supabase.")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Delete Error: {e}")
+    else:
+        st.info("No records available to update.")
 
 # --- 9. REPORTS ---
 elif choice == "📈 Reports":
@@ -293,22 +347,47 @@ elif choice == "📈 Reports":
     else:
         st.info("No records available to create a report.")
 
-# --- 11. SETTINGS ---
+# --- 10. SETTINGS (Admin Password & User Creation) ---
 elif choice == "⚙️ Settings":
     st.title("⚙️ System Settings")
+    
+    # --- 🔑 මුරපදය වෙනස් කිරීම (Change Password) ---
     st.subheader("🔑 Change Password")
-    with st.form("pass_form"):
-        new_p = st.text_input("New Password", type="password")
-        if st.form_submit_button("Update Password") and new_p:
-            supabase.table("users").update({"password": new_p}).eq("username", st.session_state['current_user']).execute()
-            st.success("Changed!")
+    with st.form("change_pass_form"):
+        new_pass = st.text_input("New Password", type="password")
+        confirm_pass = st.text_input("Confirm New Password", type="password")
+        
+        if st.form_submit_button("Update Password"):
+            if new_pass == confirm_pass and new_pass != "":
+                try:
+                    # Supabase හි දැනට ලොග් වී සිටින පරිශීලකයාගේ මුරපදය Update කිරීම
+                    supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
+                    st.success("✅ The password has been changed successfully!")
+                except Exception as e:
+                    st.error(f"❌ Error updating password: {e}")
+            else:
+                st.error("❌ The password does not match or is empty!")
 
+    st.divider()
+
+    # --- 👤 නව පරිශීලකයෙකු සෑදීම (Create New User) ---
     st.subheader("👤 Create New User")
-    with st.form("u_form"):
-        new_u = st.text_input("New Username")
-        new_up = st.text_input("New Password", type="password")
-        if st.form_submit_button("Create") and new_u and new_up:
-            try:
-                supabase.table("users").insert({"username": new_u, "password": new_up}).execute()
-                st.success(f"User {new_u} Created!")
-            except: st.error("User exists!")
+    with st.form("create_user_form"):
+        new_username = st.text_input("New Username")
+        new_user_pass = st.text_input("New User Password", type="password")
+        
+        if st.form_submit_button("Create User"):
+            if new_username != "" and new_user_pass != "":
+                try:
+                    # Supabase හි users table එකට නව දත්ත ඇතුළත් කිරීම
+                    user_data = {"username": new_username, "password": new_user_pass}
+                    supabase.table("users").insert(user_data).execute()
+                    st.success(f"✅ User '{new_username}' Successfully created!")
+                except Exception as e:
+                    # බොහෝ විට එකම Username එක දෙවරක් ඇතුළත් කිරීමට උත්සාහ කළහොත් මෙය ක්‍රියාත්මක වේ
+                    if "duplicate key" in str(e).lower():
+                        st.error("❌ This username already exists in the system!")
+                    else:
+                        st.error(f"❌ Error creating user: {e}")
+            else:
+                st.error("❌ Please enter the username and password!")
