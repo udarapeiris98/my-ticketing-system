@@ -203,24 +203,95 @@ elif choice == "🔄 Update & Delete":
             supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
             st.warning("Deleted!"); time.sleep(1); st.rerun()
 
-# --- 10. REPORTS ---
+# --- 9. REPORTS ---
 elif choice == "📈 Reports":
-    st.title("📈 Reports")
+    st.title("📈 Operational Performance Reports")
+    
+    # දත්ත ලබා ගැනීම (get_data() ශ්‍රිතය Supabase සඳහා සකසා ඇති බව උපකල්පනය කෙරේ)
     df = get_data()
+    
     if not df.empty:
+        # 1. දින වකවානු සකස් කිරීම (Supabase හි TEXT ලෙස ඇති දින Date objects බවට පත් කිරීම)
         df['created_on_dt'] = pd.to_datetime(df['created_on']).dt.date
-        s_date = st.date_input("Start", df['created_on_dt'].min())
-        e_date = st.date_input("End", df['created_on_dt'].max())
-        rep_df = df[(df['created_on_dt'] >= s_date) & (df['created_on_dt'] <= e_date)]
         
-        st.write(f"Total: {len(rep_df)}")
-        st.dataframe(rep_df, use_container_width=True)
+        # Range (Date Filter)
+        col_f1, col_f2 = st.columns(2)
+        min_date = df['created_on_dt'].min()
+        max_date = df['created_on_dt'].max()
         
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            rep_df.to_excel(writer, index=False)
-        st.download_button("📥 Excel Download", output.getvalue(), "report.xlsx")
-    else: st.info("No data.")
+        start_date = col_f1.date_input("Start Date", min_date)
+        end_date = col_f2.date_input("End Date", max_date)
+        
+        # දත්ත Filter කිරීම
+        mask = (df['created_on_dt'] >= start_date) & (df['created_on_dt'] <= end_date)
+        report_df = df.loc[mask].copy() # Original df එකට හානි නොවීමට copy එකක් ගනු ලැබේ
+
+        if not report_df.empty:
+            # 2. Executive Summary Cards
+            st.subheader("📋 Summary for the period")
+            r1, r2, r3, r4 = st.columns(4)
+            
+            r1.metric("Total Tickets", len(report_df))
+            
+            # Resolved/Closed ටිකට් ප්‍රමාණය
+            resolved_count = len(report_df[report_df['status'].isin(['Resolved', 'Closed'])])
+            r2.metric("Total Resolved", resolved_count)
+            
+            # සාමාන්‍ය විසඳුම් කාලය (Average resolve time)
+            # Supabase වල මෙය TEXT ලෙස තිබිය හැකි බැවින් NUMERIC බවට පත් කරයි
+            avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
+            r3.metric("Average Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
+            
+            # වැඩිපුරම ලැබුණු ගැටලු වර්ගය (Top Category)
+            if not report_df['category'].dropna().empty:
+                top_cat = report_df['category'].mode()[0]
+            else:
+                top_cat = "N/A"
+            r4.metric("Main Issue", top_cat)
+
+            st.divider()
+
+            # 3. Visual Analysis for Reports
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                fig1 = px.bar(report_df, x='assigned_to', color='status', 
+                             title="Technician Performance", 
+                             barmode='stack',
+                             color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig1, use_container_width=True)
+                
+            with col_c2:
+                fig2 = px.histogram(report_df, x='category', 
+                                   title="Issue Categorization",
+                                   color_discrete_sequence=['#636EFA'])
+                st.plotly_chart(fig2, use_container_width=True)
+
+            st.divider()
+
+            # 4. Data Table & Export
+            st.subheader("📄 Detailed Data Log")
+            # පෙන්වීමට අනවශ්‍ය columns ඉවත් කිරීම (ඇත්නම් පමණක්)
+            display_df = report_df.drop(columns=['created_on_dt']) if 'created_on_dt' in report_df.columns else report_df
+            st.dataframe(display_df, use_container_width=True)
+
+            # Excel Download Button
+            try:
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    report_df.to_excel(writer, index=False, sheet_name='Ticket Report')
+                
+                st.download_button(
+                    label="📥 Download this report as Excel (XLSX)",
+                    data=output.getvalue(),
+                    file_name=f"Ticket_Report_{start_date}_to_{end_date}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.error(f"Excel generation error: {e}")
+        else:
+            st.warning("තෝරාගත් කාලසීමාව සඳහා දත්ත කිසිවක් නැත.")
+    else:
+        st.info("No records available to create a report.")
 
 # --- 11. SETTINGS ---
 elif choice == "⚙️ Settings":
