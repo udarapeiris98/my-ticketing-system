@@ -248,7 +248,7 @@ elif choice == "🔄 Update & Delete":
                     st.error(f"Update Error: {e}")
 
         # Delete Section
-        st.subheader("⚠️ Danger Zone")
+        st.subheader("⚠️ Warning !")
         confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
         if st.button("🗑️ Delete Ticket permanently", disabled=not confirm_delete):
             try:
