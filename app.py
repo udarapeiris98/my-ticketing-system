@@ -206,10 +206,6 @@ else:
  "created_by": st.session_state.current_user,
  "due_on": str(due),
 
- "closed_on": None,
- "time_to_resolve": None,
- "time_spent_min": 0,
- "remarks": None
 }
 
                 }
