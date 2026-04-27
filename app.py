@@ -25,7 +25,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- 1. SUPABASE CONNECTION ---
 URL = "https://tfyulwcbjnmrecrukzsm.supabase.co"
-KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeXVsd2Niam5tcmVjcnVrenNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwNTksImV4cCI6MjA5MjY2MDA1OX0.5P22_9CzrKKrMmrn0Vils-gnUlk-jQqzfXAf2M8ulD8"
+KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE"
 supabase = create_client(URL, KEY)
 
 # --- 2. HELPER FUNCTIONS ---
@@ -86,9 +86,12 @@ if not st.session_state["logged_in"]:
                 user_info = res.data[0]
                 st.session_state["logged_in"] = True
                 st.session_state["current_user"] = user_info.get("username", u)
-                st.session_state["can_create"] = user_info.get("can_create_ticket", False)
-                st.session_state["can_update"] = user_info.get("can_update_ticket", False)
-                st.session_state["is_admin"] = user_info.get("is_admin", False)
+                # FIX BOOLEAN VALUES FROM DATABASE (prevents normal users becoming admin)
+                def to_bool(v):
+                    return str(v).lower() in ['true','1','t','yes']
+                st.session_state["can_create"] = to_bool(user_info.get("can_create_ticket", False))
+                st.session_state["can_update"] = to_bool(user_info.get("can_update_ticket", False))
+                st.session_state["is_admin"] = to_bool(user_info.get("is_admin", False))
                 st.success(f"Welcome {st.session_state['current_user']}!")
                 time.sleep(1)
                 st.rerun()
@@ -450,6 +453,10 @@ else:
                     st.error("Username and password are required.")
 
         st.divider()
+
+        st.subheader("🔒 DB PERMISSION CHECK RUN THIS IN SQL")
+        st.code('''UPDATE users SET is_admin=FALSE WHERE username=''normal_user'';
+SELECT username,is_admin,can_create_ticket,can_update_ticket FROM users;''')
 
         st.subheader("👥 Existing Users")
         if st.button("Refresh Users List"):
