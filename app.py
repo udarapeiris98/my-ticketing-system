@@ -223,23 +223,37 @@ if st.session_state['logged_in']:
         else: st.info("No records available.")
 
     # --- 10. SETTINGS ---
+    # --- 10. SETTINGS SECTION ---
     elif choice == "⚙️ Settings":
         st.title("⚙️ System Settings")
+        st.markdown("---")
+
+        # 🔑 1. Password Change Section
         st.subheader("🔑 Change Your Password")
         with st.form("change_pass_form"):
             new_pass = st.text_input("New Password", type="password")
             confirm_pass = st.text_input("Confirm New Password", type="password")
             if st.form_submit_button("Update Password"):
                 if new_pass == confirm_pass and new_pass != "":
-                    supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
-                    st.success("✅ Password updated!")
-                else: st.error("❌ Passwords do not match!")
+                    try:
+                        supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
+                        st.success("✅ Password updated successfully!")
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+                else:
+                    st.error("❌ Passwords do not match!")
 
         st.divider()
+
+        # 👤 2. Create New User with Permissions (මෙන්න මේ කොටසයි වැදගත්)
         st.subheader("👤 Create New User with Permissions")
         with st.form("create_user_form", clear_on_submit=True):
             new_username = st.text_input("New Username")
             new_user_pass = st.text_input("New User Password", type="password")
+            
+            st.write("**Assign Access Level:**")
+            
+            # Checkboxes පෙන්වන කොටස
             col1, col2, col3 = st.columns(3)
             c_create = col1.checkbox("Can Create Ticket")
             c_update = col2.checkbox("Can Update Ticket")
@@ -248,15 +262,26 @@ if st.session_state['logged_in']:
             if st.form_submit_button("Create User"):
                 if new_username and new_user_pass:
                     try:
-                        user_data = {"username": new_username, "password": new_user_pass,
-                                   "can_create_ticket": c_create, "can_update_ticket": c_update, "is_admin": c_admin}
+                        # Database එකට දත්ත යැවීම
+                        user_data = {
+                            "username": new_username, 
+                            "password": new_user_pass,
+                            "can_create_ticket": c_create,
+                            "can_update_ticket": c_update,
+                            "is_admin": c_admin
+                        }
                         supabase.table("users").insert(user_data).execute()
-                        st.success(f"✅ User '{new_username}' created!")
-                    except Exception as e: st.error(f"❌ Error: {e}")
-                else: st.error("❌ Fill all fields!")
+                        st.success(f"✅ User '{new_username}' created successfully!")
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+                else:
+                    st.error("❌ Please provide both Username and Password!")
 
+        # පවතින පරිශීලකයින් බැලීම
         if st.checkbox("Show Existing Users"):
             try:
                 users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
                 st.table(users_list.data)
+            except:
+                pass
             except: pass
