@@ -1,9 +1,10 @@
 import streamlit as st
 # මෙය ඔබේ කේතයේ මුලින්ම තිබිය යුතුය
 st.set_page_config(
-    page_title="Star Packaging - Ticketing System",  # මෙහි ඔබට අවශ්‍ය නම ලබා දෙන්න
-    page_icon="🎫",                                 # මෙහි Emoji එකක් හෝ පින්තූරයක Link එකක් දිය හැක
-    layout="wide"                                   # පිටුව පෙන්වන ආකාරය (විකල්ප)
+    page_title="Star Packaging - Ticketing System",
+    page_icon="🎫",
+    layout="centered"  # "wide" වෙනුවට "centered" යොදන්න
+)                               # පිටුව පෙන්වන ආකාරය (විකල්ප)
 )
 import pandas as pd
 from supabase import create_client
