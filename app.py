@@ -25,7 +25,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- 1. SUPABASE CONNECTION ---
 URL = "https://tfyulwcbjnmrecrukzsm.supabase.co"
-KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE"
+KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeXVsd2Niam5tcmVjcnVrenNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwNTksImV4cCI6MjA5MjY2MDA1OX0.5P22_9CzrKKrMmrn0Vils-gnUlk-jQqzfXAf2M8ulD8"
 supabase = create_client(URL, KEY)
 
 # --- 2. HELPER FUNCTIONS ---
