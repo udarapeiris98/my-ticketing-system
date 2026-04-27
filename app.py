@@ -47,36 +47,47 @@ def get_users():
         st.error(f"Error fetching users: {e}")
         return pd.DataFrame()
 
-# --- 3. LOGIN SYSTEM ---
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
+# --- LOGIN LOGIC ---
+if st.button("Login"):
+    res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
+    
+    if len(res.data) > 0:
+        user_info = res.data[0]
+        st.session_state['logged_in'] = True
+        st.session_state['current_user'] = u
+        
+        # Database එකේ ඇතිPermissions Session State එකට ලබා ගැනීම
+        st.session_state['can_create'] = user_info.get('can_create_ticket', False)
+        st.session_state['can_update'] = user_info.get('can_update_ticket', False)
+        st.session_state['is_admin'] = user_info.get('is_admin', False)
+        
+        st.success(f"Welcome {u}!")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("Invalid Username or Password")
 
-if not st.session_state['logged_in']:
-    st.title("🔐 Login")
-    u = st.text_input("Username")
-    p = st.text_input("Password", type='password')
-    if st.button("Login"):
-        try:
-            # Supabase හරහා පරිශීලකයා පරීක්ෂා කිරීම
-            res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
-            if len(res.data) > 0:
-                st.session_state['logged_in'] = True
-                st.session_state['current_user'] = u
-                st.rerun()
-            else:
-                st.error("Invalid Username or Password!")
-        except Exception as e:
-            st.error(f"Login Error: {e}")
-    st.stop()
+# --- SIDEBAR MENU ---
+if st.session_state.get('logged_in'):
+    # මූලික මෙනුව (සියලුම පරිශීලකයින්ට පෙනේ)
+    menu_options = ["🏠 Home"]
 
-# --- 4. SIDEBAR NAVIGATION ---
-st.sidebar.title(f"👤 {st.session_state['current_user']}")
-menu = ["📊 Dashboard", "📅 Schedule View", "🔍 View & Search", "➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"]
-choice = st.sidebar.selectbox("Menu", menu)
+    # ටිකට් සෑදීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_create') or st.session_state.get('is_admin'):
+        menu_options.append("🎫 Create Ticket")
 
-if st.sidebar.button("Logout"):
-    st.session_state['logged_in'] = False
-    st.rerun()
+    # ටිකට් යාවත්කාලීන කිරීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_update') or st.session_state.get('is_admin'):
+        menu_options.append("🔄 Update & Delete")
+
+    # Admin කෙනෙකු නම් පමණක් Reports සහ Settings පෙන්වන්න
+    if st.session_state.get('is_admin'):
+        menu_options.append("📈 Reports")
+        menu_options.append("⚙️ Settings")
+
+    menu_options.append("🚪 Logout")
+    
+    choice = st.sidebar.selectbox("Menu", menu_options)
 
 # --- 5. DASHBOARD ---
 if choice == "📊 Dashboard":
