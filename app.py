@@ -1,10 +1,6 @@
 import streamlit as st
-# මෙය ඔබේ කේතයේ මුලින්ම තිබිය යුතුය
-st.set_page_config(
-    page_title="Star Packaging - Ticketing System",
-    page_icon="🎫",
-    layout="centered"  # "wide" වෙනුවට "centered" යොදන්න
-)   
+
+# Toolbar එක සහ GitHub Icon එක සැඟවීමට CSS
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -12,7 +8,15 @@ hide_st_style = """
             header {visibility: hidden;}
             </style>
             """
-st.markdown(hide_st_style, unsafe_allow_html=True)# පිටුව පෙන්වන ආකාරය (විකල්ප)
+st.markdown(hide_st_style, unsafe_allow_html=True)
+import streamlit as st
+# මෙය ඔබේ කේතයේ මුලින්ම තිබිය යුතුය
+st.set_page_config(
+    page_title="Star Packaging - Ticketing System",
+    page_icon="🎫",
+    layout="centered"  # "wide" වෙනුවට "centered" යොදන්න
+)   
+
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, date, timedelta
