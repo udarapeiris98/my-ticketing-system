@@ -1,6 +1,19 @@
 import streamlit as st
+import pandas as pd
+from supabase import create_client
+from datetime import datetime, date, timedelta
+import time
+import plotly.express as px
+import io
 
-# Toolbar එක සහ GitHub Icon එක සැඟවීමට CSS
+# --- PAGE CONFIG ---
+st.set_page_config(
+    page_title="Star Packaging - Ticketing System",
+    page_icon="🎫",
+    layout="centered"
+)
+
+# Toolbar එක සැඟවීමට CSS
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -9,20 +22,6 @@ hide_st_style = """
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
-# මෙය ඔබේ කේතයේ මුලින්ම තිබිය යුතුය
-st.set_page_config(
-    page_title="Star Packaging - Ticketing System",
-    page_icon="🎫",
-    layout="centered"
-)   
-
-import pandas as pd
-from supabase import create_client
-from datetime import datetime, date, timedelta
-import time
-import plotly.express as px
-import io
 
 # --- 1. SUPABASE CONNECTION ---
 URL = "https://tfyulwcbjnmrecrukzsm.supabase.co" 
@@ -42,27 +41,21 @@ def get_data():
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-# --- LOGIN LOGIC ---
+# --- 4. LOGIN LOGIC ---
 if not st.session_state['logged_in']:
     st.title("🔐 Login")
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
     
     if st.button("Login"):
-        # මෙහිදී select("*") මගින් සියලුම columns (Permissions සහිතව) ලබා ගනී
         res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
-        
         if len(res.data) > 0:
             user_info = res.data[0]
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
-            
-            # Database එකේ ඇති Permissions values ලබා ගැනීම
-            # වැදගත්: column names ඔබ Supabase එකේ දුන් නමම විය යුතුයි (can_create_ticket, etc.)
             st.session_state['can_create'] = user_info.get('can_create_ticket', False)
             st.session_state['can_update'] = user_info.get('can_update_ticket', False)
             st.session_state['is_admin'] = user_info.get('is_admin', False)
-            
             st.success(f"Welcome {u}!")
             time.sleep(1)
             st.rerun()
@@ -72,33 +65,29 @@ if not st.session_state['logged_in']:
 # --- 5. MAIN APPLICATION (AFTER LOGIN) ---
 else:
     # --- SIDEBAR MENU ---
-  # --- SIDEBAR MENU (AFTER LOGIN) ---
-if st.session_state['logged_in']:
-    # සෑම පරිශීලකයෙකුටම පෙනෙන මූලික මෙනුව
     menu_options = ["🏠 Home"]
-
-    # 1. Ticket එකක් සෑදීමට අවසර තිබේ නම් හෝ Admin නම් පමණක් පෙන්වන්න
-    if st.session_state.get('can_create') == True or st.session_state.get('is_admin') == True:
+    if st.session_state.get('can_create') or st.session_state.get('is_admin'):
         menu_options.append("➕ Create Ticket")
-
-    # 2. Ticket එකක් Update කිරීමට අවසර තිබේ නම් හෝ Admin නම් පමණක් පෙන්වන්න
-    if st.session_state.get('can_update') == True or st.session_state.get('is_admin') == True:
+    if st.session_state.get('can_update') or st.session_state.get('is_admin'):
         menu_options.append("🔄 Update & Delete")
-
-    # 3. Admin කෙනෙකුට පමණක් පෙනෙන කොටස්
-    if st.session_state.get('is_admin') == True:
+    if st.session_state.get('is_admin'):
         menu_options.append("📈 Reports")
         menu_options.append("⚙️ Settings")
-
     menu_options.append("🚪 Logout")
+    
     choice = st.sidebar.selectbox("Menu", menu_options)
 
-    # --- Home Page (Default) ---
+    # --- Logout Logic ---
+    if choice == "🚪 Logout":
+        st.session_state['logged_in'] = False
+        st.rerun()
+
+    # --- Home Page ---
     elif choice == "🏠 Home":
         st.title(f"Welcome, {st.session_state['current_user']}!")
         st.write("Star Packaging Ticketing System එකට සාදරයෙන් පිළිගනිමු.")
 
-    # --- 8. CREATE TICKET ---
+    # --- CREATE TICKET ---
     elif choice == "➕ Create Ticket":
         st.title("➕ Create New Ticket")
         if 'f_key' not in st.session_state: st.session_state.f_key = 0
@@ -123,14 +112,13 @@ if st.session_state['logged_in']:
                     }
                     try:
                         supabase.table("tickets").insert(ticket_data).execute()
-                        st.success("✅ Ticket submitted to Cloud Database!"); time.sleep(1); st.rerun()
+                        st.success("✅ Ticket submitted!"); time.sleep(1); st.rerun()
                     except Exception as e: st.error(f"Error: {e}")
 
-    # --- 8. UPDATE & DELETE ---
+    # --- UPDATE & DELETE ---
     elif choice == "🔄 Update & Delete":
         st.title("🔄 Update or Delete Ticket")
         df = get_data()
-        
         if not df.empty:
             ticket_options = {f"{row['ticket_number']} - {row['summary']}": row['ticket_number'] for _, row in df.iterrows()}
             selected_option = st.selectbox("Select Ticket", list(ticket_options.keys()))
@@ -141,20 +129,14 @@ if st.session_state['logged_in']:
                 col1, col2 = st.columns(2)
                 u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], 
                                         index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
-                
                 technicians = ["Udara", "Supun", "Madushan", "Technician"]
                 u_assign = col1.selectbox("Re-assign To", technicians,
                                         index=technicians.index(row['assigned_to']) if row['assigned_to'] in technicians else 0)
-                
                 u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"],
                                        index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
                 
-                try:
-                    db_date = row.get('due_on')
-                    current_due_date = pd.to_datetime(db_date).date() if db_date else datetime.now().date()
-                except:
-                    current_due_date = datetime.now().date()
-                    
+                db_date = row.get('due_on')
+                current_due_date = pd.to_datetime(db_date).date() if db_date else datetime.now().date()
                 u_due_date = col2.date_input("Update Due Date", value=current_due_date)
                 u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
                 
@@ -194,7 +176,7 @@ if st.session_state['logged_in']:
                 except Exception as e: st.error(f"Delete Error: {e}")
         else: st.info("No records available.")
 
-    # --- 9. REPORTS ---
+    # --- REPORTS ---
     elif choice == "📈 Reports":
         st.title("📈 Operational Performance Reports")
         df = get_data()
@@ -203,7 +185,6 @@ if st.session_state['logged_in']:
             col_f1, col_f2 = st.columns(2)
             start_date = col_f1.date_input("Start Date", df['created_on_dt'].min())
             end_date = col_f2.date_input("End Date", df['created_on_dt'].max())
-            
             report_df = df[(df['created_on_dt'] >= start_date) & (df['created_on_dt'] <= end_date)]
 
             if not report_df.empty:
@@ -213,22 +194,15 @@ if st.session_state['logged_in']:
                 avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
                 r3.metric("Average Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
                 r4.metric("Main Issue", report_df['category'].mode()[0] if not report_df['category'].empty else "N/A")
-
-                col_c1, col_c2 = st.columns(2)
-                with col_c1: st.plotly_chart(px.bar(report_df, x='assigned_to', color='status', title="Technician Performance"), use_container_width=True)
-                with col_c2: st.plotly_chart(px.histogram(report_df, x='category', title="Issue Categorization"), use_container_width=True)
-                
                 st.dataframe(report_df, use_container_width=True)
             else: st.warning("No data for selected range.")
         else: st.info("No records available.")
 
-    # --- 10. SETTINGS ---
-    # --- 10. SETTINGS SECTION ---
+    # --- SETTINGS ---
     elif choice == "⚙️ Settings":
         st.title("⚙️ System Settings")
         st.markdown("---")
 
-        # 🔑 1. Password Change Section
         st.subheader("🔑 Change Your Password")
         with st.form("change_pass_form"):
             new_pass = st.text_input("New Password", type="password")
@@ -238,22 +212,16 @@ if st.session_state['logged_in']:
                     try:
                         supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
                         st.success("✅ Password updated successfully!")
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-                else:
-                    st.error("❌ Passwords do not match!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
+                else: st.error("❌ Passwords do not match!")
 
         st.divider()
 
-        # 👤 2. Create New User with Permissions (මෙන්න මේ කොටසයි වැදගත්)
         st.subheader("👤 Create New User with Permissions")
         with st.form("create_user_form", clear_on_submit=True):
             new_username = st.text_input("New Username")
             new_user_pass = st.text_input("New User Password", type="password")
-            
             st.write("**Assign Access Level:**")
-            
-            # Checkboxes පෙන්වන කොටස
             col1, col2, col3 = st.columns(3)
             c_create = col1.checkbox("Can Create Ticket")
             c_update = col2.checkbox("Can Update Ticket")
@@ -262,26 +230,17 @@ if st.session_state['logged_in']:
             if st.form_submit_button("Create User"):
                 if new_username and new_user_pass:
                     try:
-                        # Database එකට දත්ත යැවීම
                         user_data = {
-                            "username": new_username, 
-                            "password": new_user_pass,
-                            "can_create_ticket": c_create,
-                            "can_update_ticket": c_update,
-                            "is_admin": c_admin
+                            "username": new_username, "password": new_user_pass,
+                            "can_create_ticket": c_create, "can_update_ticket": c_update, "is_admin": c_admin
                         }
                         supabase.table("users").insert(user_data).execute()
                         st.success(f"✅ User '{new_username}' created successfully!")
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-                else:
-                    st.error("❌ Please provide both Username and Password!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
+                else: st.error("❌ Provide Username and Password!")
 
-        # පවතින පරිශීලකයින් බැලීම
         if st.checkbox("Show Existing Users"):
             try:
                 users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
                 st.table(users_list.data)
-            except:
-                pass
             except: pass
