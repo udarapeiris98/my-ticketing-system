@@ -65,20 +65,25 @@ if not st.session_state['logged_in']:
 
 # --- 5. MAIN APPLICATION (AFTER LOGIN) ---
 else:
-    # --- SIDEBAR MENU (අවසර මත පදනම්ව මෙනුව සකස් කිරීම) ---
+ # --- SIDEBAR MENU (අවසරයන් හරියටම වෙන් කිරීම) ---
     menu_options = ["🏠 Home"]
     
-    # admin ට සියල්ල පෙනේ, අනෙක් අයට තමන්ට අදාළ දේ පමණක් පෙනේ
-    if st.session_state.get('is_admin'):
-        menu_options.extend(["➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"])
-    else:
-        if st.session_state.get('can_create'):
-            menu_options.append("➕ Create Ticket")
-        if st.session_state.get('can_update'):
-            menu_options.append("🔄 Update & Delete")
-            
+    # 1. ටිකට් සෑදීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_create') == True or st.session_state.get('is_admin') == True:
+        menu_options.append("➕ Create Ticket")
+        
+    # 2. ටිකට් යාවත්කාලීන කිරීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_update') == True or st.session_state.get('is_admin') == True:
+        menu_options.append("🔄 Update & Delete")
+        
+    # 3. Reports සහ Settings පෙන්විය යුත්තේ Admin ට පමණි
+    if st.session_state.get('is_admin') == True:
+        menu_options.append("📈 Reports")
+        menu_options.append("⚙️ Settings")
+        
     menu_options.append("🚪 Logout")
     
+    choice = st.sidebar.selectbox("Menu", menu_options)
     choice = st.sidebar.selectbox("Menu", menu_options)
 
     # --- Logout Logic ---
