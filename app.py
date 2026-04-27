@@ -42,8 +42,11 @@ def get_current_user():
     return st.session_state.get("current_user", "")
 
 
+ADMIN_USERS = ['admin']
+
 def is_admin():
-    return st.session_state.get("is_admin", False) is True
+    # hard lock admin access only to listed usernames
+    return get_current_user().lower() in [u.lower() for u in ADMIN_USERS]
 
 
 def can_create_ticket():
@@ -84,6 +87,10 @@ if not st.session_state["logged_in"]:
             res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
             if len(res.data) > 0:
                 user_info = res.data[0]
+                # clear any stale role cache before new login
+                for k in ['is_admin','can_create','can_update']:
+                    if k in st.session_state:
+                        del st.session_state[k]
                 st.session_state["logged_in"] = True
                 st.session_state["current_user"] = user_info.get("username", u)
                 # FIX BOOLEAN VALUES FROM DATABASE (prevents normal users becoming admin)
