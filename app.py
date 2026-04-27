@@ -376,47 +376,54 @@ elif choice == "📈 Reports":
     else:
         st.info("No records available to create a report.")
 
-# --- 10. SETTINGS (Admin Password & User Creation) ---
+# --- 10. SETTINGS (User Creation with Permissions) ---
 elif choice == "⚙️ Settings":
     st.title("⚙️ System Settings")
     
-    # --- 🔑 මුරපදය වෙනස් කිරීම (Change Password) ---
+    # 🔑 1. මුරපදය වෙනස් කිරීමේ කොටස (Change Password)
     st.subheader("🔑 Change Password")
     with st.form("change_pass_form"):
         new_pass = st.text_input("New Password", type="password")
         confirm_pass = st.text_input("Confirm New Password", type="password")
-        
         if st.form_submit_button("Update Password"):
             if new_pass == confirm_pass and new_pass != "":
                 try:
-                    # Supabase හි දැනට ලොග් වී සිටින පරිශීලකයාගේ මුරපදය Update කිරීම
                     supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
-                    st.success("✅ The password has been changed successfully!")
+                    st.success("✅ Password updated successfully!")
                 except Exception as e:
-                    st.error(f"❌ Error updating password: {e}")
+                    st.error(f"❌ Error: {e}")
             else:
-                st.error("❌ The password does not match or is empty!")
+                st.error("❌ Passwords do not match!")
 
     st.divider()
 
-    # --- 👤 නව පරිශීලකයෙකු සෑදීම (Create New User) ---
-    st.subheader("👤 Create New User")
+    # 👤 2. නව පරිශීලකයෙකු සෑදීමේ කොටස (Create New User)
+    st.subheader("👤 Create New User with Permissions")
     with st.form("create_user_form"):
         new_username = st.text_input("New Username")
         new_user_pass = st.text_input("New User Password", type="password")
         
+        # මෙන්න මේ කොටස තමයි අලුතින් එකතු වෙන්නේ (Permissions)
+        st.write("Assign Access Level:")
+        col1, col2, col3 = st.columns(3)
+        c_create = col1.checkbox("Can Create Ticket")
+        c_update = col2.checkbox("Can Update Ticket")
+        c_admin = col3.checkbox("Is Admin")
+        
         if st.form_submit_button("Create User"):
             if new_username != "" and new_user_pass != "":
                 try:
-                    # Supabase හි users table එකට නව දත්ත ඇතුළත් කිරීම
-                    user_data = {"username": new_username, "password": new_user_pass}
+                    # Supabase වෙත දත්ත යැවීම
+                    user_data = {
+                        "username": new_username, 
+                        "password": new_user_pass,
+                        "can_create_ticket": c_create,
+                        "can_update_ticket": c_update,
+                        "is_admin": c_admin
+                    }
                     supabase.table("users").insert(user_data).execute()
-                    st.success(f"✅ User '{new_username}' Successfully created!")
+                    st.success(f"✅ User '{new_username}' created with selected permissions!")
                 except Exception as e:
-                    # බොහෝ විට එකම Username එක දෙවරක් ඇතුළත් කිරීමට උත්සාහ කළහොත් මෙය ක්‍රියාත්මක වේ
-                    if "duplicate key" in str(e).lower():
-                        st.error("❌ This username already exists in the system!")
-                    else:
-                        st.error(f"❌ Error creating user: {e}")
+                    st.error(f"❌ Error: {e}")
             else:
-                st.error("❌ Please enter the username and password!")
+                st.error("❌ Fill all fields!")
