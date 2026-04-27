@@ -4,7 +4,15 @@ st.set_page_config(
     page_title="Star Packaging - Ticketing System",
     page_icon="🎫",
     layout="centered"  # "wide" වෙනුවට "centered" යොදන්න
-)                               # පිටුව පෙන්වන ආකාරය (විකල්ප)
+)   
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)# පිටුව පෙන්වන ආකාරය (විකල්ප)
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, date, timedelta
