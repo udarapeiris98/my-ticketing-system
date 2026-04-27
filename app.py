@@ -5,7 +5,6 @@ st.set_page_config(
     page_icon="🎫",
     layout="centered"  # "wide" වෙනුවට "centered" යොදන්න
 )                               # පිටුව පෙන්වන ආකාරය (විකල්ප)
-)
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, date, timedelta
