@@ -69,24 +69,21 @@ if st.button("Login"):
 
 # --- SIDEBAR MENU ---
 if st.session_state.get('logged_in'):
-    # මූලික මෙනුව (සියලුම පරිශීලකයින්ට පෙනේ)
     menu_options = ["🏠 Home"]
 
-    # ටිකට් සෑදීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
+    # is_admin TRUE නම් හෝ අදාළ අවසරය තිබේ නම් පමණක් මෙනුව පෙන්වයි
     if st.session_state.get('can_create') or st.session_state.get('is_admin'):
         menu_options.append("🎫 Create Ticket")
 
-    # ටිකට් යාවත්කාලීන කිරීමේ අවසරය ඇත්නම් පමණක් පෙන්වන්න
     if st.session_state.get('can_update') or st.session_state.get('is_admin'):
         menu_options.append("🔄 Update & Delete")
 
-    # Admin කෙනෙකු නම් පමණක් Reports සහ Settings පෙන්වන්න
+    # Reports සහ Settings පෙනෙන්නේ IS_ADMIN = TRUE අයට පමණි
     if st.session_state.get('is_admin'):
         menu_options.append("📈 Reports")
         menu_options.append("⚙️ Settings")
 
     menu_options.append("🚪 Logout")
-    
     choice = st.sidebar.selectbox("Menu", menu_options)
 
 # --- 5. DASHBOARD ---
@@ -376,15 +373,17 @@ elif choice == "📈 Reports":
     else:
         st.info("No records available to create a report.")
 
-# --- 10. SETTINGS (User Creation with Permissions) ---
+# --- ⚙️ SETTINGS SECTION (REPLACE YOUR OLD SETTINGS CODE WITH THIS) ---
 elif choice == "⚙️ Settings":
     st.title("⚙️ System Settings")
-    
-    # 🔑 1. මුරපදය වෙනස් කිරීමේ කොටස (Change Password)
-    st.subheader("🔑 Change Password")
+    st.markdown("---")
+
+    # 🔑 1. Password Change Section
+    st.subheader("🔑 Change Your Password")
     with st.form("change_pass_form"):
         new_pass = st.text_input("New Password", type="password")
         confirm_pass = st.text_input("Confirm New Password", type="password")
+        
         if st.form_submit_button("Update Password"):
             if new_pass == confirm_pass and new_pass != "":
                 try:
@@ -393,25 +392,30 @@ elif choice == "⚙️ Settings":
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
             else:
-                st.error("❌ Passwords do not match!")
+                st.error("❌ Passwords do not match or are empty!")
 
-    st.divider()
+    st.write("")
+    st.markdown("---")
+    st.write("")
 
-    # 👤 2. නව පරිශීලකයෙකු සෑදීමේ කොටස (Create New User)
+    # 👤 2. Create New User with Permissions Section
     st.subheader("👤 Create New User with Permissions")
-    with st.form("create_user_form"):
+    with st.form("create_user_form", clear_on_submit=True):
         new_username = st.text_input("New Username")
         new_user_pass = st.text_input("New User Password", type="password")
         
-        # මෙන්න මේ කොටස තමයි අලුතින් එකතු වෙන්නේ (Permissions)
-        st.write("Assign Access Level:")
-        col1, col2, col3 = st.columns(3)
-        c_create = col1.checkbox("Can Create Ticket")
-        c_update = col2.checkbox("Can Update Ticket")
-        c_admin = col3.checkbox("Is Admin")
+        st.write("**Assign Access Level / Permissions:**")
         
-        if st.form_submit_button("Create User"):
-            if new_username != "" and new_user_pass != "":
+        # Columns භාවිතයෙන් Checkboxes ලස්සනට පෙළගැස්වීම
+        col1, col2, col3 = st.columns(3)
+        c_create = col1.checkbox("Can Create Ticket", help="Allow user to add new tickets")
+        c_update = col2.checkbox("Can Update Ticket", help="Allow user to update existing tickets")
+        c_admin = col3.checkbox("Is System Admin", help="Full access to Reports and Settings")
+        
+        submit_user = st.form_submit_button("Create User")
+        
+        if submit_user:
+            if new_username and new_user_pass:
                 try:
                     # Supabase වෙත දත්ත යැවීම
                     user_data = {
@@ -422,8 +426,17 @@ elif choice == "⚙️ Settings":
                         "is_admin": c_admin
                     }
                     supabase.table("users").insert(user_data).execute()
-                    st.success(f"✅ User '{new_username}' created with selected permissions!")
+                    st.success(f"✅ User '{new_username}' created successfully!")
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
             else:
-                st.error("❌ Fill all fields!")
+                st.error("❌ Please provide both Username and Password!")
+
+    # 📋 3. Optional: දැනට සිටින පරිශීලකයින් බැලීම (Admin Only)
+    st.markdown("---")
+    if st.checkbox("Show Existing Users"):
+        try:
+            users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
+            st.table(users_list.data)
+        except:
+            pass
