@@ -42,13 +42,14 @@ def get_data():
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-# --- 4. LOGIN INTERFACE ---
+# --- LOGIN LOGIC ---
 if not st.session_state['logged_in']:
     st.title("🔐 Login")
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
     
     if st.button("Login"):
+        # මෙහිදී select("*") මගින් සියලුම columns (Permissions සහිතව) ලබා ගනී
         res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
         
         if len(res.data) > 0:
@@ -56,7 +57,8 @@ if not st.session_state['logged_in']:
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
             
-            # Database එකේ ඇති Permissions Session State එකට ලබා ගැනීම
+            # Database එකේ ඇති Permissions values ලබා ගැනීම
+            # වැදගත්: column names ඔබ Supabase එකේ දුන් නමම විය යුතුයි (can_create_ticket, etc.)
             st.session_state['can_create'] = user_info.get('can_create_ticket', False)
             st.session_state['can_update'] = user_info.get('can_update_ticket', False)
             st.session_state['is_admin'] = user_info.get('is_admin', False)
@@ -70,25 +72,26 @@ if not st.session_state['logged_in']:
 # --- 5. MAIN APPLICATION (AFTER LOGIN) ---
 else:
     # --- SIDEBAR MENU ---
+  # --- SIDEBAR MENU (AFTER LOGIN) ---
+if st.session_state['logged_in']:
+    # සෑම පරිශීලකයෙකුටම පෙනෙන මූලික මෙනුව
     menu_options = ["🏠 Home"]
 
-    # අවසර අනුව මෙනු විකල්ප පෙන්වීම
-    if st.session_state.get('can_create') or st.session_state.get('is_admin'):
+    # 1. Ticket එකක් සෑදීමට අවසර තිබේ නම් හෝ Admin නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_create') == True or st.session_state.get('is_admin') == True:
         menu_options.append("➕ Create Ticket")
 
-    if st.session_state.get('can_update') or st.session_state.get('is_admin'):
+    # 2. Ticket එකක් Update කිරීමට අවසර තිබේ නම් හෝ Admin නම් පමණක් පෙන්වන්න
+    if st.session_state.get('can_update') == True or st.session_state.get('is_admin') == True:
         menu_options.append("🔄 Update & Delete")
 
-    if st.session_state.get('is_admin'):
+    # 3. Admin කෙනෙකුට පමණක් පෙනෙන කොටස්
+    if st.session_state.get('is_admin') == True:
         menu_options.append("📈 Reports")
         menu_options.append("⚙️ Settings")
 
     menu_options.append("🚪 Logout")
     choice = st.sidebar.selectbox("Menu", menu_options)
-
-    if choice == "🚪 Logout":
-        st.session_state['logged_in'] = False
-        st.rerun()
 
     # --- Home Page (Default) ---
     elif choice == "🏠 Home":
