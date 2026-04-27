@@ -53,6 +53,7 @@ if not st.session_state['logged_in']:
             user_info = res.data[0]
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
+            # Database එකේ ඇති අගයන් Session එකට ලබා ගැනීම
             st.session_state['can_create'] = user_info.get('can_create_ticket', False)
             st.session_state['can_update'] = user_info.get('can_update_ticket', False)
             st.session_state['is_admin'] = user_info.get('is_admin', False)
@@ -64,22 +65,26 @@ if not st.session_state['logged_in']:
 
 # --- 5. MAIN APPLICATION (AFTER LOGIN) ---
 else:
-    # --- SIDEBAR MENU ---
+    # --- SIDEBAR MENU (අවසර මත පදනම්ව මෙනුව සකස් කිරීම) ---
     menu_options = ["🏠 Home"]
-    if st.session_state.get('can_create') or st.session_state.get('is_admin'):
-        menu_options.append("➕ Create Ticket")
-    if st.session_state.get('can_update') or st.session_state.get('is_admin'):
-        menu_options.append("🔄 Update & Delete")
+    
+    # admin ට සියල්ල පෙනේ, අනෙක් අයට තමන්ට අදාළ දේ පමණක් පෙනේ
     if st.session_state.get('is_admin'):
-        menu_options.append("📈 Reports")
-        menu_options.append("⚙️ Settings")
+        menu_options.extend(["➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"])
+    else:
+        if st.session_state.get('can_create'):
+            menu_options.append("➕ Create Ticket")
+        if st.session_state.get('can_update'):
+            menu_options.append("🔄 Update & Delete")
+            
     menu_options.append("🚪 Logout")
     
     choice = st.sidebar.selectbox("Menu", menu_options)
 
     # --- Logout Logic ---
     if choice == "🚪 Logout":
-        st.session_state['logged_in'] = False
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
 
     # --- Home Page ---
@@ -162,23 +167,25 @@ else:
                                      "due_on": str(u_due_date), "time_spent_min": t_spent,
                                      "closed_on": closed_on, "time_to_resolve": res_time, "remarks": u_remarks}
                         supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
-                        st.toast(f"Ticket {t_id} updated!", icon='✅')
+                        st.success(f"Ticket {t_id} updated!")
                         time.sleep(1); st.rerun()
                     except Exception as e: st.error(f"Update Error: {e}")
 
-            st.subheader("⚠️ Warning !")
-            confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
-            if st.button("🗑️ Delete Ticket permanently", disabled=not confirm_delete):
-                try:
-                    supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
-                    st.warning(f"Ticket {t_id} removed.")
-                    time.sleep(1); st.rerun()
-                except Exception as e: st.error(f"Delete Error: {e}")
+            # Delete function එක Admin ට පමණක් සීමා කිරීම වඩාත් ආරක්ෂිතයි
+            if st.session_state.get('is_admin'):
+                st.subheader("⚠️ Danger Zone")
+                confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
+                if st.button("🗑️ Delete Ticket", disabled=not confirm_delete):
+                    try:
+                        supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
+                        st.warning(f"Ticket {t_id} removed.")
+                        time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Delete Error: {e}")
         else: st.info("No records available.")
 
     # --- REPORTS ---
     elif choice == "📈 Reports":
-        st.title("📈 Operational Performance Reports")
+        st.title("📈 Performance Reports")
         df = get_data()
         if not df.empty:
             df['created_on_dt'] = pd.to_datetime(df['created_on']).dt.date
@@ -190,20 +197,18 @@ else:
             if not report_df.empty:
                 r1, r2, r3, r4 = st.columns(4)
                 r1.metric("Total Tickets", len(report_df))
-                r2.metric("Total Resolved", len(report_df[report_df['status'].isin(['Resolved', 'Closed'])]))
+                r2.metric("Resolved", len(report_df[report_df['status'].isin(['Resolved', 'Closed'])]))
                 avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
-                r3.metric("Average Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
-                r4.metric("Main Issue", report_df['category'].mode()[0] if not report_df['category'].empty else "N/A")
+                r3.metric("Avg Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
+                r4.metric("Top Issue", report_df['category'].mode()[0] if not report_df['category'].empty else "N/A")
                 st.dataframe(report_df, use_container_width=True)
             else: st.warning("No data for selected range.")
-        else: st.info("No records available.")
 
-   # --- 10. SETTINGS SECTION ---
+    # --- SETTINGS SECTION ---
     elif choice == "⚙️ Settings":
         st.title("⚙️ System Settings")
         st.markdown("---")
 
-        # 🔑 1. Password Change Section
         st.subheader("🔑 Change Your Password")
         with st.form("change_pass_form"):
             new_pass = st.text_input("New Password", type="password")
@@ -211,25 +216,18 @@ else:
             if st.form_submit_button("Update Password"):
                 if new_pass == confirm_pass and new_pass != "":
                     try:
-                        # පවතින පරිශීලකයාගේ මුරපදය යාවත්කාලීන කිරීම
                         supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
                         st.success("✅ Password updated successfully!")
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-                else:
-                    st.error("❌ Passwords do not match or empty!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
+                else: st.error("❌ Passwords do not match!")
 
         st.divider()
 
-        # 👤 2. Create New User with Permissions
-        st.subheader("👤 Create New User with Permissions")
+        st.subheader("👤 Create New User")
         with st.form("create_user_form", clear_on_submit=True):
             new_username = st.text_input("New Username")
             new_user_pass = st.text_input("New User Password", type="password")
-            
             st.write("**Assign Access Level:**")
-            
-            # පේළියට Checkboxes පෙන්වීම සඳහා columns භාවිතා කිරීම
             col1, col2, col3 = st.columns(3)
             c_create = col1.checkbox("Can Create Ticket")
             c_update = col2.checkbox("Can Update Ticket")
@@ -238,26 +236,16 @@ else:
             if st.form_submit_button("Create User"):
                 if new_username and new_user_pass:
                     try:
-                        # Database එකට නව දත්ත ඇතුළත් කිරීම
                         user_data = {
-                            "username": new_username, 
-                            "password": new_user_pass,
-                            "can_create_ticket": c_create,
-                            "can_update_ticket": c_update,
-                            "is_admin": c_admin
+                            "username": new_username, "password": new_user_pass,
+                            "can_create_ticket": c_create, "can_update_ticket": c_update, "is_admin": c_admin
                         }
                         supabase.table("users").insert(user_data).execute()
-                        st.success(f"✅ User '{new_username}' created successfully!")
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-                else:
-                    st.error("❌ Please provide both Username and Password!")
+                        st.success(f"✅ User '{new_username}' created!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
 
-        # පවතින පරිශීලකයින් සහ ඔවුන්ගේ අවසරයන් පරීක්ෂා කිරීම
         if st.checkbox("Show Existing Users"):
             try:
                 users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
-                if users_list.data:
-                    st.table(users_list.data)
-            except Exception as e:
-                st.error(f"❌ Could not fetch users: {e}")
+                st.table(users_list.data)
+            except: pass
