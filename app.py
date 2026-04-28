@@ -1,467 +1,251 @@
 import streamlit as st
 import pandas as pd
 from supabase import create_client
-from datetime import datetime,date,timedelta
+from datetime import datetime, date, timedelta
 import time
+import plotly.express as px
+import io
 
-##########################################
-# SUPABASE
-##########################################
-
-URL="YOUR_SUPABASE_URL"
-KEY="YOUR_SUPABASE_KEY"
-
-supabase=create_client(URL,KEY)
-
+# --- PAGE CONFIG ---
 st.set_page_config(
-page_title="Ticketing System",
-page_icon="🎫"
+    page_title="Star Packaging - Ticketing System",
+    page_icon="🎫",
+    layout="centered"
 )
 
-##########################################
-# FUNCTIONS
-##########################################
+# Toolbar එක සැඟවීමට CSS
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
+# --- 1. SUPABASE CONNECTION ---
+URL = "https://tfyulwcbjnmrecrukzsm.supabase.co" 
+KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeXVsd2Niam5tcmVjcnVrenNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwNTksImV4cCI6MjA5MjY2MDA1OX0.5P22_9CzrKKrMmrn0Vils-gnUlk-jQqzfXAf2M8ulD8"
+supabase = create_client(URL, KEY)
+
+# --- 2. DATA FUNCTIONS ---
 def get_data():
-    data=supabase.table("tickets").select("*").execute()
-    return pd.DataFrame(data.data)
+    try:
+        response = supabase.table("tickets").select("*").execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Error fetching tickets: {e}")
+        return pd.DataFrame()
 
+# --- 3. SESSION STATE INITIALIZATION ---
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
 
-def is_admin():
-    return st.session_state.get("is_admin",False)
-
-
-def can_create():
-    return st.session_state.get("can_create",False) or is_admin()
-
-
-def can_update():
-    return st.session_state.get("can_update",False) or is_admin()
-
-
-def logout():
-    st.session_state.clear()
-    st.rerun()
-
-
-##########################################
-# SESSION
-##########################################
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in=False
-
-
-##########################################
-# LOGIN
-##########################################
-
-if not st.session_state.logged_in:
-
-    st.title("Login")
-
-    u=st.text_input("Username")
-    p=st.text_input("Password",type="password")
-
+# --- 4. LOGIN LOGIC ---
+if not st.session_state['logged_in']:
+    st.title("🔐 Login")
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    
     if st.button("Login"):
-
-        res=supabase.table("users")\
-        .select("*")\
-        .eq("username",u)\
-        .eq("password",p)\
-        .execute()
-
-        if len(res.data)>0:
-
-            user=res.data[0]
-
-            st.session_state.logged_in=True
-            st.session_state.current_user=user["username"]
-
-            st.session_state.can_create=user["can_create_ticket"]
-            st.session_state.can_update=user["can_update_ticket"]
-            st.session_state.is_admin=user["is_admin"]
-
-            st.success("Login Success")
+        res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
+        if len(res.data) > 0:
+            user_info = res.data[0]
+            st.session_state['logged_in'] = True
+            st.session_state['current_user'] = u
+            # Database එකේ ඇති අගයන් Session එකට ලබා ගැනීම
+            st.session_state['can_create'] = user_info.get('can_create_ticket', False)
+            st.session_state['can_update'] = user_info.get('can_update_ticket', False)
+            st.session_state['is_admin'] = user_info.get('is_admin', False)
+            st.success(f"Welcome {u}!")
             time.sleep(1)
             st.rerun()
-
         else:
-            st.error("Invalid login")
+            st.error("Invalid Username or Password")
 
-
-##########################################
-# MAIN
-##########################################
-
+# --- 5. MAIN APPLICATION (AFTER LOGIN) ---
 else:
-
-    menu=["Home"]
-
-    if can_create():
-        menu.append("Create Ticket")
-
-    if can_update():
-        menu.append("Update Ticket")
-
-    if is_admin():
-        menu.append("Delete Ticket")
-        menu.append("Reports")
-        menu.append("Settings")
-
-    menu.append("Logout")
-
-    choice=st.sidebar.selectbox(
-        "Menu",
-        menu
-    )
-
-
-##########################################
-# HOME
-##########################################
-
-    if choice=="Home":
-
-        st.title(
-        f"Welcome {st.session_state.current_user}"
-        )
-
-        c1,c2,c3=st.columns(3)
-
-        c1.metric(
-        "Create",
-        "Yes" if can_create() else "No"
-        )
-
-        c2.metric(
-        "Update",
-        "Yes" if can_update() else "No"
-        )
-
-        c3.metric(
-        "Admin",
-        "Yes" if is_admin() else "No"
-        )
-
-
-##########################################
-# CREATE
-##########################################
-
-    elif choice=="Create Ticket":
-
-        st.title("Create Ticket")
-
-        with st.form("ticketform"):
-
-            summary=st.text_input("Summary")
-
-            desc=st.text_area(
-            "Description"
-            )
-
-            cat=st.selectbox(
-            "Category",
-            [
-            "Hardware",
-            "Software",
-            "Network",
-            "Printer"
-            ])
-
-            priority=st.selectbox(
-            "Priority",
-            [
-            "Low",
-            "Medium",
-            "High"
-            ])
-
-            assigned=st.selectbox(
-            "Assign To",
-            [
-            "Technician",
-            "Udara",
-            "Supun"
-            ])
-
-            due=st.date_input(
-            "Due Date",
-            date.today()+timedelta(days=1)
-            )
-
-            if st.form_submit_button(
-            "Submit"
-            ):
-
-            data = {
- "summary": summary,
- "description": desc,
- "category": cat,
- "priority": priority,
- "assigned_to": assigned,
- "organization_name": org,
- "status":"Open",
- "created_by": st.session_state.current_user,
- "due_on": str(due),
-
-}
-
-                }
-
-                supabase.table(
-                "tickets"
-                ).insert(data).execute()
-
-                st.success(
-                "Ticket Created"
-                )
-
-
-##########################################
-# UPDATE
-##########################################
-
-    elif choice=="Update Ticket":
-
-        st.title(
-        "Update Ticket"
-        )
-
-        df=get_data()
-
-        if not is_admin():
-
-            df=df[
-            df["created_by"]==
-            st.session_state.current_user
-            ]
-
-        if len(df)==0:
-            st.warning("No Tickets")
-            st.stop()
-
-        options={
-        f'{r["ticket_number"]}-{r["summary"]}':
-        r["ticket_number"]
-        for _,r in df.iterrows()
-        }
-
-        selected=st.selectbox(
-        "Select",
-        list(options.keys())
-        )
-
-        tid=options[selected]
-
-        row=df[
-        df.ticket_number==tid
-        ].iloc[0]
-
-
-        if is_admin():
-
-            with st.form("adminupdate"):
-
-                status=st.selectbox(
-                "Status",
-                [
-                "Open",
-                "In Progress",
-                "Resolved",
-                "Closed"
-                ])
-
-                assign=st.text_input(
-                "Assign",
-                row["assigned_to"]
-                )
-
-                remarks=st.text_area(
-                "Remarks"
-                )
-
-                if st.form_submit_button(
-                "Update"
-                ):
-
-                    supabase.table(
-                    "tickets"
-                    ).update({
-
-                    "status":status,
-                    "assigned_to":assign,
-                    "remarks":remarks
-
-                    }).eq(
-                    "ticket_number",
-                    tid
-                    ).execute()
-
-                    st.success(
-                    "Updated"
-                    )
-
-        else:
-
-            with st.form("userupdate"):
-
-                status=st.selectbox(
-                "Status",
-                [
-                "Open",
-                "In Progress",
-                "Resolved"
-                ])
-
-                remarks=st.text_area(
-                "Remarks"
-                )
-
-                if st.form_submit_button(
-                "Update"
-                ):
-
-                    supabase.table(
-                    "tickets"
-                    ).update({
-
-                    "status":status,
-                    "remarks":remarks
-
-                    }).eq(
-                    "ticket_number",
-                    tid
-                    ).execute()
-
-                    st.success(
-                    "Updated"
-                    )
-
-
-##########################################
-# DELETE ADMIN
-##########################################
-
-    elif choice=="Delete Ticket":
-
-        st.title("Delete Ticket")
-
-        df=get_data()
-
-        options={
-        f'{r["ticket_number"]}-{r["summary"]}':
-        r["ticket_number"]
-        for _,r in df.iterrows()
-        }
-
-        selected=st.selectbox(
-        "Select Ticket",
-        list(options.keys())
-        )
-
-        tid=options[selected]
-
-        if st.button(
-        "Delete"
-        ):
-
-            supabase.table(
-            "tickets"
-            ).delete().eq(
-            "ticket_number",
-            tid
-            ).execute()
-
-            st.success(
-            "Deleted"
-            )
-
-
-##########################################
-# REPORTS ADMIN
-##########################################
-
-    elif choice=="Reports":
-
-        st.title("Reports")
-
-        df=get_data()
-
-        st.dataframe(df)
-
-        st.metric(
-        "Total Tickets",
-        len(df)
-        )
-
-
-##########################################
-# SETTINGS ADMIN
-##########################################
-
-    elif choice=="Settings":
-
-        st.title(
-        "Create New User"
-        )
-
-        with st.form(
-        "newuser"
-        ):
-
-            uname=st.text_input(
-            "Username"
-            )
-
-            pwd=st.text_input(
-            "Password",
-            type="password"
-            )
-
-            create=st.checkbox(
-            "Create Ticket",
-            True
-            )
-
-            update=st.checkbox(
-            "Update Ticket",
-            True
-            )
-
-            admin=st.checkbox(
-            "Admin"
-            )
-
-            if st.form_submit_button(
-            "Create User"
-            ):
-
-                supabase.table(
-                "users"
-                ).insert({
-
-                "username":uname,
-                "password":pwd,
-                "can_create_ticket":
-                    create if not admin else True,
-
-                "can_update_ticket":
-                    update if not admin else True,
-
-                "is_admin":admin
-
-                }).execute()
-
-                st.success(
-                "User Created"
-                )
-
-
-##########################################
-# LOGOUT
-##########################################
-
-    elif choice=="Logout":
-        logout()
+    # --- SIDEBAR MENU (අවසර මත පදනම්ව මෙනුව සකස් කිරීම) ---
+    menu_options = ["🏠 Home"]
+    
+    # admin ට සියල්ල පෙනේ, අනෙක් අයට තමන්ට අදාළ දේ පමණක් පෙනේ
+    if st.session_state.get('is_admin'):
+        menu_options.extend(["➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"])
+    else:
+        if st.session_state.get('can_create'):
+            menu_options.append("➕ Create Ticket")
+        if st.session_state.get('can_update'):
+            menu_options.append("🔄 Update & Delete")
+            
+    menu_options.append("🚪 Logout")
+    
+    choice = st.sidebar.selectbox("Menu", menu_options)
+
+    # --- Logout Logic ---
+    if choice == "🚪 Logout":
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+    # --- Home Page ---
+    elif choice == "🏠 Home":
+        st.title(f"Welcome, {st.session_state['current_user']}!")
+        st.write("Star Packaging Ticketing System එකට සාදරයෙන් පිළිගනිමු.")
+
+    # --- CREATE TICKET ---
+    elif choice == "➕ Create Ticket":
+        st.title("➕ Create New Ticket")
+        if 'f_key' not in st.session_state: st.session_state.f_key = 0
+        with st.form(key=f"ticket_form_{st.session_state.f_key}"):
+            col1, col2 = st.columns(2)
+            summ = col1.text_input("Summary")
+            assigned = col1.selectbox("Assign To", ["Udara", "Supun", "Madushan", "Technician"])
+            cat = col1.selectbox("Category", ["PC Hardware", "Software", "Network", "Printer", "Email", "CCTV", "Others"])
+            prio = col2.selectbox("Priority", ["Low", "Medium", "High", "Urgent"])
+            org = col2.text_input("Organization / Dept")
+            due = col2.date_input("Due Date", date.today() + timedelta(days=1))
+            desc = st.text_area("Detailed Description")
+            
+            if st.form_submit_button("Submit"):
+                if summ:
+                    ticket_data = {
+                        "summary": summ, "description": desc, "assigned_to": assigned, "category": cat,
+                        "closed_on": "", "created_on": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "created_by": st.session_state['current_user'], "due_on": str(due),
+                        "priority": prio, "organization_name": org, "status": "Open",
+                        "time_spent_min": "0", "time_to_resolve": "", "remarks": ""
+                    }
+                    try:
+                        supabase.table("tickets").insert(ticket_data).execute()
+                        st.success("✅ Ticket submitted!"); time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
+
+    # --- UPDATE & DELETE ---
+    elif choice == "🔄 Update & Delete":
+        st.title("🔄 Update or Delete Ticket")
+        df = get_data()
+        if not df.empty:
+            ticket_options = {f"{row['ticket_number']} - {row['summary']}": row['ticket_number'] for _, row in df.iterrows()}
+            selected_option = st.selectbox("Select Ticket", list(ticket_options.keys()))
+            t_id = ticket_options[selected_option]
+            row = df[df['ticket_number'] == t_id].iloc[0]
+            
+            with st.form("update_form_new"):
+                col1, col2 = st.columns(2)
+                u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], 
+                                        index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
+                technicians = ["Udara", "Supun", "Madushan", "Technician"]
+                u_assign = col1.selectbox("Re-assign To", technicians,
+                                        index=technicians.index(row['assigned_to']) if row['assigned_to'] in technicians else 0)
+                u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"],
+                                       index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
+                
+                db_date = row.get('due_on')
+                current_due_date = pd.to_datetime(db_date).date() if db_date else datetime.now().date()
+                u_due_date = col2.date_input("Update Due Date", value=current_due_date)
+                u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
+                
+                if st.form_submit_button("✅ Save Changes"):
+                    closed_on = str(row['closed_on']) if row['closed_on'] else ""
+                    res_time = str(row['time_to_resolve']) if row['time_to_resolve'] else ""
+                    t_spent = str(row['time_spent_min']) if row['time_spent_min'] else "0"
+                    
+                    if u_status in ["Resolved", "Closed"]:
+                        if not row['closed_on'] or row['closed_on'] == "":
+                            now = datetime.now()
+                            closed_on = now.strftime("%Y-%m-%d %H:%M")
+                            try:
+                                start = datetime.strptime(str(row['created_on']), "%Y-%m-%d %H:%M")
+                                diff = now - start
+                                sec = int(diff.total_seconds())
+                                res_time = f"{sec//86400}d {(sec%86400)//3600}h {(sec%3600)//60}m"
+                                t_spent = str(sec // 60)
+                            except: res_time = "N/A"
+                    
+                    try:
+                        update_data = {"status": u_status, "assigned_to": u_assign, "priority": u_prio,
+                                     "due_on": str(u_due_date), "time_spent_min": t_spent,
+                                     "closed_on": closed_on, "time_to_resolve": res_time, "remarks": u_remarks}
+                        supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
+                        st.success(f"Ticket {t_id} updated!")
+                        time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Update Error: {e}")
+
+            # Delete function එක Admin ට පමණක් සීමා කිරීම වඩාත් ආරක්ෂිතයි
+            if st.session_state.get('is_admin'):
+                st.subheader("⚠️ Danger Zone")
+                confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
+                if st.button("🗑️ Delete Ticket", disabled=not confirm_delete):
+                    try:
+                        supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
+                        st.warning(f"Ticket {t_id} removed.")
+                        time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Delete Error: {e}")
+        else: st.info("No records available.")
+
+    # --- REPORTS ---
+    elif choice == "📈 Reports":
+        st.title("📈 Performance Reports")
+        df = get_data()
+        if not df.empty:
+            df['created_on_dt'] = pd.to_datetime(df['created_on']).dt.date
+            col_f1, col_f2 = st.columns(2)
+            start_date = col_f1.date_input("Start Date", df['created_on_dt'].min())
+            end_date = col_f2.date_input("End Date", df['created_on_dt'].max())
+            report_df = df[(df['created_on_dt'] >= start_date) & (df['created_on_dt'] <= end_date)]
+
+            if not report_df.empty:
+                r1, r2, r3, r4 = st.columns(4)
+                r1.metric("Total Tickets", len(report_df))
+                r2.metric("Resolved", len(report_df[report_df['status'].isin(['Resolved', 'Closed'])]))
+                avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
+                r3.metric("Avg Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
+                r4.metric("Top Issue", report_df['category'].mode()[0] if not report_df['category'].empty else "N/A")
+                st.dataframe(report_df, use_container_width=True)
+            else: st.warning("No data for selected range.")
+
+    # --- SETTINGS SECTION ---
+    elif choice == "⚙️ Settings":
+        st.title("⚙️ System Settings")
+        st.markdown("---")
+
+        st.subheader("🔑 Change Your Password")
+        with st.form("change_pass_form"):
+            new_pass = st.text_input("New Password", type="password")
+            confirm_pass = st.text_input("Confirm New Password", type="password")
+            if st.form_submit_button("Update Password"):
+                if new_pass == confirm_pass and new_pass != "":
+                    try:
+                        supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
+                        st.success("✅ Password updated successfully!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
+                else: st.error("❌ Passwords do not match!")
+
+        st.divider()
+
+        st.subheader("👤 Create New User")
+        with st.form("create_user_form", clear_on_submit=True):
+            new_username = st.text_input("New Username")
+            new_user_pass = st.text_input("New User Password", type="password")
+            st.write("**Assign Access Level:**")
+            col1, col2, col3 = st.columns(3)
+            c_create = col1.checkbox("Can Create Ticket")
+            c_update = col2.checkbox("Can Update Ticket")
+            c_admin = col3.checkbox("Is System Admin")
+            
+            if st.form_submit_button("Create User"):
+                if new_username and new_user_pass:
+                    try:
+                        user_data = {
+                            "username": new_username, "password": new_user_pass,
+                            "can_create_ticket": c_create, "can_update_ticket": c_update, "is_admin": c_admin
+                        }
+                        supabase.table("users").insert(user_data).execute()
+                        st.success(f"✅ User '{new_username}' created!")
+                    except Exception as e: st.error(f"❌ Error: {e}")
+
+        if st.checkbox("Show Existing Users"):
+            try:
+                users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
+                st.table(users_list.data)
+            except: pass
