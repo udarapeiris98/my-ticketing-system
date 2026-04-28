@@ -13,10 +13,9 @@ st.set_page_config(
     layout="centered"
 )
 
-# නිවැරදි ක්‍රමය:
-# Me vidihata thiyenna oni:
-SUPABASE_URL = st.secrets["https://emqwhmimrajxhioiumab.supabase.co/"]
-SUPABASE_KEY = st.secrets["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtcXdobWltcmFqeGhpb2l1bWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNDY5NjYsImV4cCI6MjA5MjkyMjk2Nn0.hoHCuJCk7lwHUMjn4dnJg5Wyj_gZ5tb0aWt5glmGbUk"]
+# 17 සහ 18 පේළි මෙන්න මෙහෙම හදන්න
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 @st.cache_resource
 def init_connection():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
