@@ -15,7 +15,7 @@ st.set_page_config(
 
 # --- 1. SUPABASE SETUP ---
 # ඔබේ Supabase තොරතුරු මෙතැනට ඇතුළත් කරන්න
-SUPABASE_URL = "https://emqwhmimrajxhioiumab.supabase.co/rest/v1/"
+SUPABASE_URL = "https://emqwhmimrajxhioiumab.supabase.co/"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtcXdobWltcmFqeGhpb2l1bWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNDY5NjYsImV4cCI6MjA5MjkyMjk2Nn0.hoHCuJCk7lwHUMjn4dnJg5Wyj_gZ5tb0aWt5glmGbUk"
 
 @st.cache_resource
