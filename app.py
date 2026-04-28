@@ -245,15 +245,23 @@ elif choice == "📈 Reports":
 # --- 10. SETTINGS (ADMIN ONLY) ---
 elif choice == "⚙️ Settings":
     st.title("⚙️ System Settings")
-    st.subheader("👤 Create New User")
-    with st.form("create_user_form"):
-        new_username = st.text_input("New Username")
-        new_user_pass = st.text_input("New User Password", type="password")
-        if st.form_submit_button("Create User"):
-            if new_username and new_user_pass:
-                supabase.table("users").insert({"username": new_username, "password": new_user_pass}).execute()
-                st.success(f"✅ User '{new_username}' created!")
-st.divider()
+    
+    # 🔑 Password වෙනස් කිරීමේ කොටස
+    st.subheader("🔑 Change My Password")
+    with st.form("change_pass_form"):
+        new_pass = st.text_input("New Password", type="password")
+        confirm_pass = st.text_input("Confirm New Password", type="password")
+        if st.form_submit_button("Update Password"):
+            if new_pass == confirm_pass and new_pass != "":
+                # Supabase එකේ වත්මන් පරිශීලකයාගේ පාස්වර්ඩ් එක Update කිරීම
+                supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
+                st.success("✅ Your password has been updated!")
+            else:
+                st.error("❌ Passwords do not match or field is empty!")
+
+    st.divider()
+    
+    # 👤 අලුත් පරිශීලකයින් සෑදීමේ කොටස
     st.subheader("👤 Create New User")
     with st.form("create_user_form"):
         new_username = st.text_input("New Username")
@@ -261,9 +269,10 @@ st.divider()
         if st.form_submit_button("Create User"):
             if new_username and new_user_pass:
                 try:
-                    conn = sqlite3.connect(DB_NAME); c = conn.cursor()
-                    c.execute("INSERT INTO users VALUES (?,?)", (new_username, new_user_pass))
-                    conn.commit(); conn.close()
-                    st.success(f"✅ User '{new_username}' created!")
-                except sqlite3.IntegrityError: st.error("❌ Username exists!")
-            else: st.error("❌ Enter username and password!")
+                    # Supabase එකට අලුත් දත්ත ඇතුළත් කිරීම
+                    supabase.table("users").insert({"username": new_username, "password": new_user_pass}).execute()
+                    st.success(f"✅ User '{new_username}' created successfully!")
+                except Exception as e:
+                    st.error(f"❌ Error: Username might already exist!")
+            else:
+                st.error("❌ Please enter both username and password!")
