@@ -13,10 +13,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 1. SUPABASE SETUP ---
-# ඔබේ Supabase තොරතුරු මෙතැනට ඇතුළත් කරන්න
-# --- 1. SUPABASE SETUP ---
-# කලින් තිබූ URL සහ Key පේළි දෙක වෙනුවට මෙය ඇතුළත් කරන්න
+# නිවැරදි ක්‍රමය:
 SUPABASE_URL = st.secrets["https://emqwhmimrajxhioiumab.supabase.co/rest/v1/"]
 SUPABASE_KEY = st.secrets["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtcXdobWltcmFqeGhpb2l1bWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNDY5NjYsImV4cCI6MjA5MjkyMjk2Nn0.hoHCuJCk7lwHUMjn4dnJg5Wyj_gZ5tb0aWt5glmGbUk"]
 @st.cache_resource
