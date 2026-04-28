@@ -15,7 +15,7 @@ st.set_page_config(
 
 # --- 1. SUPABASE DATABASE CONNECTION ---
 # මෙහි 'your_connection_string' වෙනුවට Supabase Settings වල ඇති Connection String එක ලබාදෙන්න.
-DB_URL = "postgresql://postgres:[YOUR_PASSWORD]@db.[YOUR_PROJECT_REF].supabase.co:5432/postgres"
+DB_URL = "DB_URL = "postgresql://postgres.kfjrskazshtnezppbgq:982252@#Mnbv@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require""
 
 engine = create_engine(DB_URL)
 
