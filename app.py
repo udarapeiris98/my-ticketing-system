@@ -253,3 +253,17 @@ elif choice == "⚙️ Settings":
             if new_username and new_user_pass:
                 supabase.table("users").insert({"username": new_username, "password": new_user_pass}).execute()
                 st.success(f"✅ User '{new_username}' created!")
+st.divider()
+    st.subheader("👤 Create New User")
+    with st.form("create_user_form"):
+        new_username = st.text_input("New Username")
+        new_user_pass = st.text_input("New User Password", type="password")
+        if st.form_submit_button("Create User"):
+            if new_username and new_user_pass:
+                try:
+                    conn = sqlite3.connect(DB_NAME); c = conn.cursor()
+                    c.execute("INSERT INTO users VALUES (?,?)", (new_username, new_user_pass))
+                    conn.commit(); conn.close()
+                    st.success(f"✅ User '{new_username}' created!")
+                except sqlite3.IntegrityError: st.error("❌ Username exists!")
+            else: st.error("❌ Enter username and password!")
