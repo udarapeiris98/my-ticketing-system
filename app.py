@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client
+from supabase import create_client, Client
 from datetime import datetime, date, timedelta
-import time
 import plotly.express as px
 import io
+import time
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -13,239 +13,184 @@ st.set_page_config(
     layout="centered"
 )
 
-# Toolbar එක සැඟවීමට CSS
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+# --- 1. SUPABASE SETUP ---
+# ඔබේ Supabase තොරතුරු මෙතැනට ඇතුළත් කරන්න
+SUPABASE_URL = "https://emqwhmimrajxhioiumab.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtcXdobWltcmFqeGhpb2l1bWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNDY5NjYsImV4cCI6MjA5MjkyMjk2Nn0.hoHCuJCk7lwHUMjn4dnJg5Wyj_gZ5tb0aWt5glmGbUk"
 
-# --- 1. SUPABASE CONNECTION ---
-URL = "https://tfyulwcbjnmrecrukzsm.supabase.co" 
-KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeXVsd2Niam5tcmVjcnVrenNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwODQwNTksImV4cCI6MjA5MjY2MDA1OX0.5P22_9CzrKKrMmrn0Vils-gnUlk-jQqzfXAf2M8ulD8"
-supabase = create_client(URL, KEY)
+@st.cache_resource
+def init_connection():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- 2. DATA FUNCTIONS ---
-def get_data():
-    try:
-        response = supabase.table("tickets").select("*").execute()
-        return pd.DataFrame(response.data)
-    except Exception as e:
-        st.error(f"Error fetching tickets: {e}")
-        return pd.DataFrame()
+supabase: Client = init_connection()
 
-# --- 3. SESSION STATE INITIALIZATION ---
+# --- 2. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-# --- 4. LOGIN LOGIC ---
 if not st.session_state['logged_in']:
     st.title("🔐 Login")
     u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
-    
+    p = st.text_input("Password", type='password')
     if st.button("Login"):
-        res = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
-        if len(res.data) > 0:
-            user_info = res.data[0]
+        # Supabase හරහා User පරීක්ෂා කිරීම
+        response = supabase.table("users").select("*").eq("username", u).eq("password", p).execute()
+        if response.data:
             st.session_state['logged_in'] = True
             st.session_state['current_user'] = u
-            # Database එකේ ඇති අගයන් Session එකට ලබා ගැනීම
-            st.session_state['can_create'] = user_info.get('can_create_ticket', False)
-            st.session_state['can_update'] = user_info.get('can_update_ticket', False)
-            st.session_state['is_admin'] = user_info.get('is_admin', False)
-            st.success(f"Welcome {u}!")
-            time.sleep(1)
             st.rerun()
         else:
-            st.error("Invalid Username or Password")
+            st.error("Invalid Username or Password!")
+    st.stop()
 
-# --- 5. MAIN APPLICATION (AFTER LOGIN) ---
+def get_data():
+    # Supabase හරහා සියලුම ටිකට් ලබා ගැනීම
+    response = supabase.table("tickets").select("*").order("ticket_number", desc=True).execute()
+    return pd.DataFrame(response.data)
+
+# --- 3. SIDEBAR NAVIGATION ---
+st.sidebar.title(f"👤 {st.session_state['current_user']}")
+
+# Admin ට පමණක් සියලුම Menu පෙන්වීම
+if st.session_state['current_user'] == 'admin':
+    menu = ["📊 Dashboard", "📅 Schedule View", "🔍 View & Search", "➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"]
 else:
-    # --- SIDEBAR MENU (අවසර මත පදනම්ව මෙනුව සකස් කිරීම) ---
-    menu_options = ["🏠 Home"]
+    # සාමාන්‍ය User ට පෙනෙන්නේ මේවා පමණි
+    menu = ["➕ Create Ticket", "🔄 Update & Delete"]
+
+choice = st.sidebar.selectbox("Menu", menu)
+
+if st.sidebar.button("Logout"):
+    st.session_state['logged_in'] = False
+    st.rerun()
+
+# --- 4. DASHBOARD (Admin Only) ---
+if choice == "📊 Dashboard":
+    st.title("📊 Operational Insights")
+    df = get_data()
     
-    # admin ට සියල්ල පෙනේ, අනෙක් අයට තමන්ට අදාළ දේ පමණක් පෙනේ
-    if st.session_state.get('is_admin'):
-        menu_options.extend(["➕ Create Ticket", "🔄 Update & Delete", "📈 Reports", "⚙️ Settings"])
-    else:
-        if st.session_state.get('can_create'):
-            menu_options.append("➕ Create Ticket")
-        if st.session_state.get('can_update'):
-            menu_options.append("🔄 Update & Delete")
-            
-    menu_options.append("🚪 Logout")
-    
-    choice = st.sidebar.selectbox("Menu", menu_options)
+    if not df.empty:
+        total = len(df)
+        open_t = len(df[df['status'] == 'Open'])
+        prog_t = len(df[df['status'] == 'In Progress'])
+        pend_t = len(df[df['status'] == 'Pending'])
+        comp_t = len(df[df['status'].isin(['Resolved', 'Closed'])])
 
-    # --- Logout Logic ---
-    if choice == "🚪 Logout":
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+        st.markdown("""
+            <style>
+            .stMetric {
+                background-color: #ffffff !important;
+                padding: 15px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+                border: 1px solid #e0e0e0 !important;
+                text-align: center;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-    # --- Home Page ---
-    elif choice == "🏠 Home":
-        st.title(f"Welcome, {st.session_state['current_user']}!")
-        st.write("Star Packaging Ticketing System එකට සාදරයෙන් පිළිගනිමු.")
-
-    # --- CREATE TICKET ---
-    elif choice == "➕ Create Ticket":
-        st.title("➕ Create New Ticket")
-        if 'f_key' not in st.session_state: st.session_state.f_key = 0
-        with st.form(key=f"ticket_form_{st.session_state.f_key}"):
-            col1, col2 = st.columns(2)
-            summ = col1.text_input("Summary")
-            assigned = col1.selectbox("Assign To", ["Udara", "Supun", "Madushan", "Technician"])
-            cat = col1.selectbox("Category", ["PC Hardware", "Software", "Network", "Printer", "Email", "CCTV", "Others"])
-            prio = col2.selectbox("Priority", ["Low", "Medium", "High", "Urgent"])
-            org = col2.text_input("Organization / Dept")
-            due = col2.date_input("Due Date", date.today() + timedelta(days=1))
-            desc = st.text_area("Detailed Description")
-            
-            if st.form_submit_button("Submit"):
-                if summ:
-                    ticket_data = {
-                        "summary": summ, "description": desc, "assigned_to": assigned, "category": cat,
-                        "closed_on": "", "created_on": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "created_by": st.session_state['current_user'], "due_on": str(due),
-                        "priority": prio, "organization_name": org, "status": "Open",
-                        "time_spent_min": "0", "time_to_resolve": "", "remarks": ""
-                    }
-                    try:
-                        supabase.table("tickets").insert(ticket_data).execute()
-                        st.success("✅ Ticket submitted!"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Error: {e}")
-
-    # --- UPDATE & DELETE ---
-    elif choice == "🔄 Update & Delete":
-        st.title("🔄 Update or Delete Ticket")
-        df = get_data()
-        if not df.empty:
-            ticket_options = {f"{row['ticket_number']} - {row['summary']}": row['ticket_number'] for _, row in df.iterrows()}
-            selected_option = st.selectbox("Select Ticket", list(ticket_options.keys()))
-            t_id = ticket_options[selected_option]
-            row = df[df['ticket_number'] == t_id].iloc[0]
-            
-            with st.form("update_form_new"):
-                col1, col2 = st.columns(2)
-                u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], 
-                                        index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
-                technicians = ["Udara", "Supun", "Madushan", "Technician"]
-                u_assign = col1.selectbox("Re-assign To", technicians,
-                                        index=technicians.index(row['assigned_to']) if row['assigned_to'] in technicians else 0)
-                u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"],
-                                       index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
-                
-                db_date = row.get('due_on')
-                current_due_date = pd.to_datetime(db_date).date() if db_date else datetime.now().date()
-                u_due_date = col2.date_input("Update Due Date", value=current_due_date)
-                u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
-                
-                if st.form_submit_button("✅ Save Changes"):
-                    closed_on = str(row['closed_on']) if row['closed_on'] else ""
-                    res_time = str(row['time_to_resolve']) if row['time_to_resolve'] else ""
-                    t_spent = str(row['time_spent_min']) if row['time_spent_min'] else "0"
-                    
-                    if u_status in ["Resolved", "Closed"]:
-                        if not row['closed_on'] or row['closed_on'] == "":
-                            now = datetime.now()
-                            closed_on = now.strftime("%Y-%m-%d %H:%M")
-                            try:
-                                start = datetime.strptime(str(row['created_on']), "%Y-%m-%d %H:%M")
-                                diff = now - start
-                                sec = int(diff.total_seconds())
-                                res_time = f"{sec//86400}d {(sec%86400)//3600}h {(sec%3600)//60}m"
-                                t_spent = str(sec // 60)
-                            except: res_time = "N/A"
-                    
-                    try:
-                        update_data = {"status": u_status, "assigned_to": u_assign, "priority": u_prio,
-                                     "due_on": str(u_due_date), "time_spent_min": t_spent,
-                                     "closed_on": closed_on, "time_to_resolve": res_time, "remarks": u_remarks}
-                        supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
-                        st.success(f"Ticket {t_id} updated!")
-                        time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Update Error: {e}")
-
-            # Delete function එක Admin ට පමණක් සීමා කිරීම වඩාත් ආරක්ෂිතයි
-            if st.session_state.get('is_admin'):
-                st.subheader("⚠️ Danger Zone")
-                confirm_delete = st.checkbox(f"Confirm deletion of Ticket {t_id}")
-                if st.button("🗑️ Delete Ticket", disabled=not confirm_delete):
-                    try:
-                        supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
-                        st.warning(f"Ticket {t_id} removed.")
-                        time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Delete Error: {e}")
-        else: st.info("No records available.")
-
-    # --- REPORTS ---
-    elif choice == "📈 Reports":
-        st.title("📈 Performance Reports")
-        df = get_data()
-        if not df.empty:
-            df['created_on_dt'] = pd.to_datetime(df['created_on']).dt.date
-            col_f1, col_f2 = st.columns(2)
-            start_date = col_f1.date_input("Start Date", df['created_on_dt'].min())
-            end_date = col_f2.date_input("End Date", df['created_on_dt'].max())
-            report_df = df[(df['created_on_dt'] >= start_date) & (df['created_on_dt'] <= end_date)]
-
-            if not report_df.empty:
-                r1, r2, r3, r4 = st.columns(4)
-                r1.metric("Total Tickets", len(report_df))
-                r2.metric("Resolved", len(report_df[report_df['status'].isin(['Resolved', 'Closed'])]))
-                avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
-                r3.metric("Avg Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "0.0 Min")
-                r4.metric("Top Issue", report_df['category'].mode()[0] if not report_df['category'].empty else "N/A")
-                st.dataframe(report_df, use_container_width=True)
-            else: st.warning("No data for selected range.")
-
-    # --- SETTINGS SECTION ---
-    elif choice == "⚙️ Settings":
-        st.title("⚙️ System Settings")
-        st.markdown("---")
-
-        st.subheader("🔑 Change Your Password")
-        with st.form("change_pass_form"):
-            new_pass = st.text_input("New Password", type="password")
-            confirm_pass = st.text_input("Confirm New Password", type="password")
-            if st.form_submit_button("Update Password"):
-                if new_pass == confirm_pass and new_pass != "":
-                    try:
-                        supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
-                        st.success("✅ Password updated successfully!")
-                    except Exception as e: st.error(f"❌ Error: {e}")
-                else: st.error("❌ Passwords do not match!")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total", total)
+        m2.metric("🔴 Open", open_t)
+        m3.metric("🟠 Progress", prog_t)
+        m4.metric("🟡 Pending", pend_t)
+        m5.metric("🟢 Closed", comp_t)
 
         st.divider()
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(px.pie(df, names='status', title="Status Breakdown", hole=0.5), use_container_width=True)
+        with c2:
+            st.plotly_chart(px.bar(df, x='priority', color='status', title="Priority Analysis"), use_container_width=True)
+    else:
+        st.info("No records available.")
 
-        st.subheader("👤 Create New User")
-        with st.form("create_user_form", clear_on_submit=True):
-            new_username = st.text_input("New Username")
-            new_user_pass = st.text_input("New User Password", type="password")
-            st.write("**Assign Access Level:**")
-            col1, col2, col3 = st.columns(3)
-            c_create = col1.checkbox("Can Create Ticket")
-            c_update = col2.checkbox("Can Update Ticket")
-            c_admin = col3.checkbox("Is System Admin")
+# --- 5. SCHEDULE VIEW ---
+elif choice == "📅 Schedule View":
+    st.title("📅 Ticket Deadlines")
+    df = get_data()
+    if not df.empty:
+        st.dataframe(df[['ticket_number', 'summary', 'due_on', 'assigned_to', 'status']], use_container_width=True)
+    else: st.warning("No records found")
+
+# --- 6. VIEW & SEARCH ---
+elif choice == "🔍 View & Search":
+    st.title("🔍 Advanced Ticket Search")
+    df = get_data()
+    if not df.empty:
+        search_query = st.text_input("Filter by Summary/Description")
+        filtered_df = df[df['summary'].str.contains(search_query, case=False, na=False)] if search_query else df
+        st.dataframe(filtered_df, use_container_width=True)
+    else: st.info("No data found.")
+
+# --- 7. CREATE TICKET ---
+elif choice == "➕ Create Ticket":
+    st.title("➕ Create New Ticket")
+    with st.form("ticket_form"):
+        col1, col2 = st.columns(2)
+        summ = col1.text_input("Summary")
+        assigned = col1.selectbox("Assign To", ["Udara", "Supun", "Madushan", "Technician"])
+        cat = col1.selectbox("Category", ["PC Hardware", "Software", "Network", "Printer", "Email", "CCTV", "Others"])
+        prio = col2.selectbox("Priority", ["Low", "Medium", "High", "Urgent"])
+        org = col2.text_input("Organization / Dept")
+        due = col2.date_input("Due Date", date.today() + timedelta(days=1))
+        desc = st.text_area("Detailed Description")
+        
+        if st.form_submit_button("Submit"):
+            if summ:
+                data = {
+                    "summary": summ, "description": desc, "assigned_to": assigned,
+                    "category": cat, "created_on": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "created_by": st.session_state['current_user'], "due_on": str(due),
+                    "priority": prio, "organization_name": org, "status": "Open",
+                    "time_spent_min": "0", "remarks": ""
+                }
+                supabase.table("tickets").insert(data).execute()
+                st.success("✅ Ticket submitted to Supabase!"); time.sleep(1); st.rerun()
+
+# --- 8. UPDATE & DELETE ---
+elif choice == "🔄 Update & Delete":
+    st.title("🔄 Update Ticket Details")
+    df = get_data()
+    if not df.empty:
+        ticket_options = {f"{row['ticket_number']} - {row['summary']}": row['ticket_number'] for _, row in df.iterrows()}
+        selected_option = st.selectbox("Select Ticket", list(ticket_options.keys()))
+        t_id = ticket_options[selected_option]
+        row = df[df['ticket_number'] == t_id].iloc[0]
+        
+        with st.form("update_form"):
+            u_status = st.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
+            u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
             
-            if st.form_submit_button("Create User"):
-                if new_username and new_user_pass:
-                    try:
-                        user_data = {
-                            "username": new_username, "password": new_user_pass,
-                            "can_create_ticket": c_create, "can_update_ticket": c_update, "is_admin": c_admin
-                        }
-                        supabase.table("users").insert(user_data).execute()
-                        st.success(f"✅ User '{new_username}' created!")
-                    except Exception as e: st.error(f"❌ Error: {e}")
+            if st.form_submit_button("✅ Save Changes"):
+                update_data = {"status": u_status, "remarks": u_remarks}
+                if u_status in ["Resolved", "Closed"]:
+                    update_data["closed_on"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                
+                supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
+                st.success("Updated!"); time.sleep(1); st.rerun()
 
-        if st.checkbox("Show Existing Users"):
-            try:
-                users_list = supabase.table("users").select("username, can_create_ticket, can_update_ticket, is_admin").execute()
-                st.table(users_list.data)
-            except: pass
+        # Delete (Admin Only)
+        if st.session_state['current_user'] == 'admin':
+            if st.button("🗑️ Delete Ticket"):
+                supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
+                st.warning("Deleted!"); time.sleep(1); st.rerun()
+
+# --- 9. REPORTS (Admin Only) ---
+elif choice == "📈 Reports":
+    st.title("📈 Performance Reports")
+    df = get_data()
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+        # Download Excel logic මෙතනට එක් කළ හැක
+
+# --- 10. SETTINGS (Admin Only) ---
+elif choice == "⚙️ Settings":
+    st.title("⚙️ System Settings")
+    # User Creation logic
+    with st.form("new_user"):
+        new_u = st.text_input("New Username")
+        new_p = st.text_input("New Password")
+        if st.form_submit_button("Create User"):
+            supabase.table("users").insert({"username": new_u, "password": new_p}).execute()
+            st.success("User Created!")
