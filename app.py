@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
+from sqlalchemy import create_engine, text
 from datetime import datetime, date, timedelta
 import plotly.express as px
 import io
@@ -13,25 +13,29 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 1. SUPABASE SETUP (CLOUD DATABASE) ---
-# Streamlit Cloud Secrets හරහා මේවා ලබා ගනී
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+# --- 1. SUPABASE DATABASE CONNECTION ---
+# මෙහි 'your_connection_string' වෙනුවට Supabase Settings වල ඇති Connection String එක ලබාදෙන්න.
+DB_URL = "postgresql://postgres:[YOUR_PASSWORD]@db.[YOUR_PROJECT_REF].supabase.co:5432/postgres"
 
-@st.cache_resource
-def init_connection():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+engine = create_engine(DB_URL)
 
-supabase: Client = init_connection()
+def init_db():
+    with engine.connect() as conn:
+        conn.execute(text('''CREATE TABLE IF NOT EXISTS tickets (
+            ticket_number SERIAL PRIMARY KEY, 
+            summary TEXT, description TEXT, assigned_to TEXT, category TEXT, 
+            closed_on TEXT, created_on TEXT, created_by TEXT, due_on TEXT, 
+            priority TEXT, organization_name TEXT, status TEXT, 
+            time_spent_min TEXT, time_to_resolve TEXT, remarks TEXT)'''))
+        
+        conn.execute(text('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)'''))
+        
+        res = conn.execute(text("SELECT COUNT(*) FROM users")).fetchone()
+        if res[0] == 0:
+            conn.execute(text("INSERT INTO users (username, password) VALUES ('admin', '123')"))
+        conn.commit()
 
-# --- DATABASE FUNCTIONS ---
-def get_data():
-    response = supabase.table("tickets").select("*").execute()
-    return pd.DataFrame(response.data)
-
-def get_users():
-    response = supabase.table("users").select("*").execute()
-    return response.data
+init_db()
 
 # --- 2. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
@@ -42,16 +46,17 @@ if not st.session_state['logged_in']:
     u = st.text_input("Username")
     p = st.text_input("Password", type='password')
     if st.button("Login"):
-        users = get_users()
-        user_match = next((item for item in users if item["username"] == u and item["password"] == p), None)
-        
-        if user_match:
-            st.session_state['logged_in'] = True
-            st.session_state['current_user'] = u
-            st.rerun()
-        else: 
-            st.error("Invalid Username or Password!")
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT * FROM users WHERE username=:u AND password=:p"), {"u": u, "p": p}).fetchone()
+            if res:
+                st.session_state['logged_in'] = True
+                st.session_state['current_user'] = u
+                st.rerun()
+            else: st.error("Invalid Username or Password!")
     st.stop()
+
+def get_data():
+    return pd.read_sql("SELECT * FROM tickets ORDER BY ticket_number ASC", engine)
 
 # --- 3. SIDEBAR NAVIGATION ---
 st.sidebar.title(f"👤 {st.session_state['current_user']}")
@@ -81,34 +86,37 @@ if choice == "📊 Dashboard":
 
         st.markdown("""
             <style>
-            .stMetric {
-                background-color: #ffffff !important;
-                padding: 15px !important;
-                border-radius: 12px !important;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-                border: 1px solid #e0e0e0 !important;
-                text-align: center;
-            }
+            .stMetric { background-color: #ffffff !important; padding: 15px !important; border-radius: 12px !important; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; border: 1px solid #e0e0e0 !important; text-align: center; }
+            [data-testid="stMetricValue"] { color: #1a1a1a !important; font-size: 26px !important; font-weight: bold !important; }
+            [data-testid="stMetricLabel"] { color: #444444 !important; font-size: 14px !important; }
             </style>
         """, unsafe_allow_html=True)
 
         m1, m2, m3, m4, m5 = st.columns(5)
-        with m1: st.metric(label="Total Tickets", value=total)
-        with m2: st.metric(label="🔴 Open", value=open_t)
-        with m3: st.metric(label="🟠 In Progress", value=prog_t)
-        with m4: st.metric(label="🟡 Pending", value=pend_t)
-        with m5: st.metric(label="🟢 Completed", value=comp_t)
+        m1.metric(label="Total Tickets", value=total)
+        with m2: 
+            st.markdown('<div style="border-top: 5px solid #ff4b4b; padding-top:5px;">', unsafe_allow_html=True)
+            st.metric(label="🔴 Open", value=open_t)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with m3:
+            st.markdown('<div style="border-top: 5px solid #ffa500; padding-top:5px;">', unsafe_allow_html=True)
+            st.metric(label="🟠 In Progress", value=prog_t)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with m4:
+            st.markdown('<div style="border-top: 5px solid #f1c40f; padding-top:5px;">', unsafe_allow_html=True)
+            st.metric(label="🟡 Pending", value=pend_t)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with m5:
+            st.markdown('<div style="border-top: 5px solid #28a745; padding-top:5px;">', unsafe_allow_html=True)
+            st.metric(label="🟢 Completed", value=comp_t)
+            st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
         c1, c2 = st.columns(2)
-        with c1:
-            fig_pie = px.pie(df, names='status', title="Status Breakdown", hole=0.5)
-            st.plotly_chart(fig_pie, use_container_width=True)
-        with c2:
-            fig_bar = px.bar(df, x='priority', color='status', title="Priority Analysis", barmode='group')
-            st.plotly_chart(fig_bar, use_container_width=True)
-    else:
-        st.info("No records available.")
+        with c1: st.plotly_chart(px.pie(df, names='status', title="Status Breakdown", hole=0.5), use_container_width=True)
+        with c2: st.plotly_chart(px.bar(df, x='priority', color='status', title="Priority Analysis", barmode='group'), use_container_width=True)
+    else: st.info("No records available.")
 
 # --- 5. SCHEDULE VIEW ---
 elif choice == "📅 Schedule View":
@@ -143,6 +151,8 @@ elif choice == "🔍 View & Search":
 
         st.write(f"Showing **{len(filtered_df)}** results")
         st.dataframe(filtered_df, use_container_width=True)
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download filtered data as CSV", csv, "filtered_tickets.csv", "text/csv")
     else: st.info("No data found in the system.")
 
 # --- 7. CREATE TICKET ---
@@ -158,18 +168,15 @@ elif choice == "➕ Create Ticket":
         org = col2.text_input("Organization / Dept")
         due = col2.date_input("Due Date", date.today() + timedelta(days=1))
         desc = st.text_area("Detailed Description")
-        
         if st.form_submit_button("Submit"):
             if summ:
-                data = {
-                    "summary": summ, "description": desc, "assigned_to": assigned, "category": cat,
-                    "created_on": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "created_by": st.session_state['current_user'], "due_on": str(due),
-                    "priority": prio, "organization_name": org, "status": "Open",
-                    "time_spent_min": "0", "closed_on": "", "time_to_resolve": "", "remarks": ""
-                }
-                supabase.table("tickets").insert(data).execute()
-                st.success("✅ Ticket submitted successfully!"); time.sleep(1); st.rerun()
+                with engine.connect() as conn:
+                    conn.execute(text('''INSERT INTO tickets (summary, description, assigned_to, category, closed_on, created_on, created_by, due_on, priority, organization_name, status, time_spent_min, time_to_resolve, remarks) 
+                                 VALUES (:s,:d,:a,:c,:cl,:cr,:cb,:du,:p,:o,:st,:ts,:tr,:r)'''),
+                                 {"s":summ, "d":desc, "a":assigned, "c":cat, "cl":"", "cr":datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                                  "cb":st.session_state['current_user'], "du":str(due), "p":prio, "o":org, "st":"Open", "ts":"0", "tr":"", "r":""})
+                    conn.commit()
+                st.success("✅ Ticket submitted!"); time.sleep(1); st.rerun()
 
 # --- 8. UPDATE & DELETE ---
 elif choice == "🔄 Update & Delete":
@@ -183,14 +190,10 @@ elif choice == "🔄 Update & Delete":
         
         with st.form("update_form_new"):
             col1, col2 = st.columns(2)
-            u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], 
-                                    index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
-            u_assign = col1.selectbox("Re-assign To", ["Udara", "Supun", "Madushan", "Technician"],
-                                    index=["Udara", "Supun", "Madushan", "Technician"].index(row['assigned_to']) if row['assigned_to'] in ["Udara", "Supun", "Madushan", "Technician"] else 0)
-            u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"],
-                                   index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
-            
-            u_due_date = col2.date_input("Update Due Date", value=pd.to_datetime(row['due_on']).date())
+            u_status = col1.selectbox("Status", ["Open", "In Progress", "Pending", "Resolved", "Closed"], index=["Open", "In Progress", "Pending", "Resolved", "Closed"].index(row['status']))
+            u_assign = col1.selectbox("Re-assign To", ["Udara", "Supun", "Madushan", "Technician"], index=0)
+            u_prio = col2.selectbox("Change Priority", ["Low", "Medium", "High", "Urgent"], index=["Low", "Medium", "High", "Urgent"].index(row['priority']))
+            u_due_date = col2.date_input("Update Due Date", value=datetime.now().date())
             u_remarks = st.text_area("Resolution Remarks", value=str(row['remarks'] if row['remarks'] else ""))
             
             if st.form_submit_button("✅ Update"):
@@ -206,19 +209,20 @@ elif choice == "🔄 Update & Delete":
                         t_spent = str(sec // 60)
                     except: res_time = "N/A"
                 
-                update_data = {
-                    "status": u_status, "assigned_to": u_assign, "priority": u_prio,
-                    "due_on": str(u_due_date), "time_spent_min": t_spent,
-                    "closed_on": closed_on, "time_to_resolve": res_time, "remarks": u_remarks
-                }
-                supabase.table("tickets").update(update_data).eq("ticket_number", t_id).execute()
-                st.success(f"Ticket {t_id} updated!"); time.sleep(1); st.rerun()
+                with engine.connect() as conn:
+                    conn.execute(text("""UPDATE tickets SET status=:st, assigned_to=:a, priority=:p, due_on=:d, time_spent_min=:ts, closed_on=:cl, time_to_resolve=:tr, remarks=:r WHERE ticket_number=:id"""),
+                                 {"st":u_status, "a":u_assign, "p":u_prio, "d":str(u_due_date), "ts":t_spent, "cl":closed_on, "tr":res_time, "r":u_remarks, "id":t_id})
+                    conn.commit()
+                st.toast(f"Ticket {t_id} updated!", icon='✅'); time.sleep(1); st.rerun()
 
         if st.session_state['current_user'] == 'admin':
             st.subheader("⚠️ Admin: Delete Ticket")
             if st.button("🗑️ Delete Ticket permanently"):
-                supabase.table("tickets").delete().eq("ticket_number", t_id).execute()
+                with engine.connect() as conn:
+                    conn.execute(text("DELETE FROM tickets WHERE ticket_number=:id"), {"id": t_id})
+                    conn.commit()
                 st.warning(f"Ticket {t_id} removed."); time.sleep(1); st.rerun()
+    else: st.info("No tickets to update.")
 
 # --- 9. REPORTS (ADMIN ONLY) ---
 elif choice == "📈 Reports":
@@ -235,33 +239,35 @@ elif choice == "📈 Reports":
         r1, r2, r3, r4 = st.columns(4)
         r1.metric("Total Tickets", len(report_df))
         r2.metric("Total Resolved", len(report_df[report_df['status'].isin(['Resolved', 'Closed'])]))
-        
+        avg_time = pd.to_numeric(report_df['time_spent_min'], errors='coerce').mean()
+        r3.metric("Average Time", f"{avg_time:.1f} Min" if not pd.isna(avg_time) else "N/A")
+        top_cat = report_df['category'].mode()[0] if not report_df['category'].empty else "N/A"
+        r4.metric("Main Issue", top_cat)
+
+        col_c1, col_c2 = st.columns(2)
+        with col_c1: st.plotly_chart(px.bar(report_df, x='assigned_to', color='status', title="Technician Performance"), use_container_width=True)
+        with col_c2: st.plotly_chart(px.histogram(report_df, x='category', title="Issue Categorization"), use_container_width=True)
+
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             report_df.to_excel(writer, index=False, sheet_name='Ticket Report')
-        st.download_button(label="📥 Download Excel", data=output.getvalue(), file_name="Report.xlsx")
+        st.download_button(label="📥 Download Excel", data=output.getvalue(), file_name=f"Report_{start_date}.xlsx")
     else: st.info("No records available.")
 
 # --- 10. SETTINGS (ADMIN ONLY) ---
 elif choice == "⚙️ Settings":
     st.title("⚙️ System Settings")
-    
-    # 🔑 Password වෙනස් කිරීමේ කොටස
-    st.subheader("🔑 Change My Password")
+    st.subheader("🔑 Change Password")
     with st.form("change_pass_form"):
         new_pass = st.text_input("New Password", type="password")
-        confirm_pass = st.text_input("Confirm New Password", type="password")
         if st.form_submit_button("Update Password"):
-            if new_pass == confirm_pass and new_pass != "":
-                # Supabase එකේ වත්මන් පරිශීලකයාගේ පාස්වර්ඩ් එක Update කිරීම
-                supabase.table("users").update({"password": new_pass}).eq("username", st.session_state['current_user']).execute()
-                st.success("✅ Your password has been updated!")
-            else:
-                st.error("❌ Passwords do not match or field is empty!")
+            if new_pass != "":
+                with engine.connect() as conn:
+                    conn.execute(text("UPDATE users SET password=:p WHERE username=:u"), {"p":new_pass, "u":st.session_state['current_user']})
+                    conn.commit()
+                st.success("✅ Password updated!")
 
     st.divider()
-    
-    # 👤 අලුත් පරිශීලකයින් සෑදීමේ කොටස
     st.subheader("👤 Create New User")
     with st.form("create_user_form"):
         new_username = st.text_input("New Username")
@@ -269,10 +275,8 @@ elif choice == "⚙️ Settings":
         if st.form_submit_button("Create User"):
             if new_username and new_user_pass:
                 try:
-                    # Supabase එකට අලුත් දත්ත ඇතුළත් කිරීම
-                    supabase.table("users").insert({"username": new_username, "password": new_user_pass}).execute()
-                    st.success(f"✅ User '{new_username}' created successfully!")
-                except Exception as e:
-                    st.error(f"❌ Error: Username might already exist!")
-            else:
-                st.error("❌ Please enter both username and password!")
+                    with engine.connect() as conn:
+                        conn.execute(text("INSERT INTO users (username, password) VALUES (:u, :p)"), {"u":new_username, "p":new_user_pass})
+                        conn.commit()
+                    st.success(f"✅ User '{new_username}' created!")
+                except: st.error("❌ Error or Username exists!")
